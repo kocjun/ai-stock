@@ -17,6 +17,20 @@
 
 set -e  # 오류 발생 시 중단
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+cd "${PROJECT_ROOT}"
+
+# 환경 변수 로드 (.env가 있으면)
+if [ -f "${PROJECT_ROOT}/.env" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "${PROJECT_ROOT}/.env"
+    set +a
+fi
+
+LLM_BASE_URL="${OPENAI_API_BASE:-http://127.0.0.1:11434}"
+
 # 색상 정의
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -95,18 +109,19 @@ log ""
 
 log "단계 2: Ollama 서비스 상태 확인"
 
-if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+if curl -s "${LLM_BASE_URL}/api/tags" > /dev/null 2>&1; then
     log_success "Ollama 서버 실행 중"
 
     # 모델 확인
-    if curl -s http://localhost:11434/api/tags | grep -q "llama3.1"; then
+    if curl -s "${LLM_BASE_URL}/api/tags" | grep -q "llama3.1"; then
         log_success "llama3.1 모델 사용 가능"
     else
         log_warning "llama3.1 모델이 없습니다. 다른 모델 사용 가능"
     fi
 else
     log_error "Ollama 서버가 실행되지 않음"
-    log "Ollama를 시작하세요: ollama serve"
+    log "서버 주소: ${LLM_BASE_URL}"
+    log "Ollama를 시작하거나 네트워크 설정을 확인하세요."
     exit 1
 fi
 

@@ -20,11 +20,14 @@ from pathlib import Path
 from typing import Dict, List, Tuple
 from datetime import datetime
 from dataclasses import dataclass
+from urllib import request, error
 import psutil
+from dotenv import load_dotenv
 
 # 프로젝트 루트 경로
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.append(str(PROJECT_ROOT))
+load_dotenv(PROJECT_ROOT / ".env")
 
 
 @dataclass
@@ -181,6 +184,14 @@ class SystemMonitor:
         except:
             return False
 
+    def check_http_endpoint(self, url: str, timeout: int = 5) -> bool:
+        """HTTP 엔드포인트 헬스 체크"""
+        try:
+            with request.urlopen(url, timeout=timeout) as resp:
+                return 200 <= resp.status < 400
+        except Exception:
+            return False
+
     def get_all_status(self) -> Dict:
         """모든 프로세스의 현재 상태 조회"""
         status = {
@@ -222,9 +233,39 @@ class SystemMonitor:
         # 서비스 포트 확인 (설정 파일에서 동적 로드)
         for service_name, service_config in config.get('services', {}).items():
             port = service_config.get('port')
+            base_url = None
+            resolved_url = None
+
+            # 우선순위: 환경 변수 → 고정 URL
+            url_env = service_config.get('url_env')
+            if url_env:
+                env_value = os.getenv(url_env)
+                if env_value:
+                    base_url = env_value.rstrip('/')
+
+            if not base_url and service_config.get('url'):
+                base_url = service_config.get('url').rstrip('/')
+
+            health_path = service_config.get('health_path')
+            if base_url:
+                if health_path:
+                    if not health_path.startswith('/'):
+                        health_path = f"/{health_path}"
+                    resolved_url = f"{base_url}{health_path}"
+                else:
+                    resolved_url = base_url
+
+            if resolved_url:
+                available = self.check_http_endpoint(resolved_url)
+            elif port:
+                available = self.check_port(port)
+            else:
+                available = False
+
             status['services'][service_name] = {
                 'port': port,
-                'available': self.check_port(port) if port else False
+                'url': resolved_url,
+                'available': available
             }
 
         return status
@@ -269,7 +310,13 @@ class SystemMonitor:
 
         for service_name, service_info in status['services'].items():
             status_icon = "✅" if service_info['available'] else "❌"
-            print(f"{status_icon} {service_name:15} (:{service_info['port']:5}) - {'온라인' if service_info['available'] else '오프라인'}")
+            if service_info.get('url'):
+                endpoint = service_info['url']
+            elif service_info.get('port'):
+                endpoint = f":{service_info['port']}"
+            else:
+                endpoint = "-"
+            print(f"{status_icon} {service_name:15} ({endpoint}) - {'온라인' if service_info['available'] else '오프라인'}")
 
         print("\n" + "="*100)
 

@@ -54,7 +54,9 @@
     },
     "ollama": {
       "port": 11434,
-      "description": "Ollama LLM 서버"
+      "description": "Ollama LLM 서버",
+      "url_env": "OPENAI_API_BASE",
+      "health_path": "/api/tags"
     },
     "n8n": {
       "port": 5678,

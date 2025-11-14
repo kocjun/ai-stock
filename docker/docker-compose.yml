@@ -5,7 +5,7 @@ services:
     container_name: investment_postgres
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "15432:5432"
     environment:
       POSTGRES_DB: ${DB_NAME:-investment_db}
       POSTGRES_USER: ${DB_USER:-invest_user}
@@ -53,6 +53,27 @@ services:
       N8N_GIT_NODE_DISABLE_BARE_REPOS: ${N8N_GIT_NODE_DISABLE_BARE_REPOS-true}
     volumes:
       - ./n8n-data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # AI Stock Python 애플리케이션
+  ai-stock-app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.app
+    image: ai-stock-app:latest
+    container_name: ai_stock_app
+    restart: unless-stopped
+    working_dir: /app
+    network_mode: host
+    env_file:
+      - ../.env
+    environment:
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ..:/app
+    command: sleep infinity
     depends_on:
       postgres:
         condition: service_healthy

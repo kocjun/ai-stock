@@ -17,6 +17,16 @@ NC='\033[0m' # No Color
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
+# 환경 변수 로드 (.env가 있으면)
+if [ -f "${PROJECT_ROOT}/.env" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "${PROJECT_ROOT}/.env"
+    set +a
+fi
+
+LLM_BASE_URL="${OPENAI_API_BASE:-http://127.0.0.1:11434}"
+
 # 로그 디렉토리 및 파일
 TEST_LOG_DIR="$PROJECT_ROOT/tests/logs"
 mkdir -p "$TEST_LOG_DIR"
@@ -111,11 +121,11 @@ fi
 
 # 1.2 Ollama 서버 확인
 log_info "Ollama 서버 확인 중..."
-if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+if curl -s "${LLM_BASE_URL}/api/tags" > /dev/null 2>&1; then
     test_pass "Ollama 서버 응답 정상"
 else
     test_fail "Ollama 서버 응답 없음"
-    log_error "해결: brew services start ollama"
+    log_error "확인: 서버 주소 ${LLM_BASE_URL} / ollama serve 실행 여부 / 네트워크"
     exit 1
 fi
 

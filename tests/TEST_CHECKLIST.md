@@ -10,7 +10,8 @@
 ### 1.1 서비스 상태 확인
 ```bash
 docker ps | grep -E "postgres|n8n"
-curl http://localhost:11434/api/tags
+LLM_URL=${OPENAI_API_BASE:-http://127.0.0.1:11434}
+curl "${LLM_URL}/api/tags"
 ```
 
 - [ ] PostgreSQL 컨테이너 실행 중

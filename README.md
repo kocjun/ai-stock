@@ -274,6 +274,8 @@ N8N_BASIC_AUTH_PASSWORD=your_password_here
 CREWAI_STORAGE_DIR=.crewai/
 ```
 
+> **NAS 또는 원격 서버에서 내부망 LLM을 사용할 경우** `OPENAI_API_BASE`에 해당 서버 주소(예: `http://192.168.10.58:11434`)를 지정하면 됩니다. 모든 실행/테스트 스크립트는 이 값을 기반으로 헬스체크를 수행합니다.
+
 ### Docker 서비스
 
 **PostgreSQL**:
@@ -285,6 +287,25 @@ CREWAI_STORAGE_DIR=.crewai/
 - 포트: `5678`
 - URL: `http://localhost:5678`
 - 인증: admin / (설정한 비밀번호)
+
+### Synology NAS / Docker 실행
+
+Synology NAS에서 Python 3.10+를 수동 설치하기 어렵다면 Docker 컨테이너를 통해 애플리케이션을 실행할 수 있습니다.
+
+1. `.env` 파일에 데이터베이스/LLM 설정을 입력합니다 (`OPENAI_API_BASE`는 내부망 LLM 주소로 지정).
+2. Docker Compose 실행:
+   ```bash
+   cd docker
+   docker compose build ai-stock-app
+   docker compose up -d postgres n8n ai-stock-app
+   ```
+3. 컨테이너 내에서 명령 실행:
+   ```bash
+   docker compose exec ai-stock-app bash    # 쉘 접속
+   python core/agents/integrated_crew.py    # 예: 통합 에이전트 실행
+   ```
+
+`ai-stock-app` 컨테이너는 호스트 워크스페이스를 `/app`으로 마운트하며 `.env`를 자동으로 로드합니다. LLM, PostgreSQL 등 모든 의존성은 동일한 네트워크(`investment_network`)에서 접근 가능합니다.
 
 ---
 
