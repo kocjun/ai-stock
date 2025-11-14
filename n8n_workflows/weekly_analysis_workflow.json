@@ -1,0 +1,178 @@
+{
+  "name": "Weekly Investment Analysis Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * 6"
+            }
+          ]
+        }
+      },
+      "name": "Schedule Trigger (매주 토요일 09:00)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "command": "cd /path/to/ai-agent && ./scripts/run_weekly_analysis.sh",
+        "additionalFields": {}
+      },
+      "name": "Execute Weekly Analysis Script",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$node[\"Execute Weekly Analysis Script\"].json[\"exitCode\"]}}",
+              "operation": "equals",
+              "value2": "0"
+            }
+          ]
+        }
+      },
+      "name": "Check Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$env[\"N8N_WEBHOOK_URL\"]}}",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={\n  \"type\": \"weekly_report\",\n  \"status\": \"success\",\n  \"timestamp\": \"{{$now}}\",\n  \"message\": \"주간 투자 분석 완료\",\n  \"script_output\": \"{{$node['Execute Weekly Analysis Script'].json.stdout}}\"\n}"
+      },
+      "name": "Send Success Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        900,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$env[\"N8N_WEBHOOK_URL\"]}}",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={\n  \"type\": \"weekly_report\",\n  \"status\": \"error\",\n  \"timestamp\": \"{{$now}}\",\n  \"message\": \"주간 투자 분석 실패\",\n  \"error\": \"{{$node['Execute Weekly Analysis Script'].json.stderr}}\"\n}"
+      },
+      "name": "Send Error Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        900,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={\n  \"text\": \"✅ 주간 투자 분석 완료\",\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": {\n        \"type\": \"plain_text\",\n        \"text\": \"📊 주간 투자 분석 리포트\"\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"fields\": [\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*상태:* 완료\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*시간:* {{$now.format('YYYY-MM-DD HH:mm')}}\"\n        }\n      ]\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"주간 분석이 완료되었습니다. 리포트를 확인하세요.\"\n      }\n    }\n  ]\n}"
+      },
+      "name": "Slack Notification (선택)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        200
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (매주 토요일 09:00)": {
+      "main": [
+        [
+          {
+            "node": "Execute Weekly Analysis Script",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Weekly Analysis Script": {
+      "main": [
+        [
+          {
+            "node": "Check Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Success": {
+      "main": [
+        [
+          {
+            "node": "Send Success Notification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Error Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Success Notification": {
+      "main": [
+        [
+          {
+            "node": "Slack Notification (선택)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "투자분석",
+      "createdAt": "2025-10-18"
+    },
+    {
+      "name": "자동화",
+      "createdAt": "2025-10-18"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2025-10-18T00:00:00.000Z",
+  "versionId": "1.0.0"
+}

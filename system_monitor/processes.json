@@ -1,0 +1,68 @@
+{
+  "processes": {
+    "price_scheduler": {
+      "name": "Price Updater Scheduler",
+      "type": "python",
+      "auto_restart": true,
+      "command": "python paper_trading/price_scheduler.py --schedule hourly",
+      "restart_interval_minutes": 30,
+      "max_memory_mb": 500,
+      "description": "자동 가격 업데이트 스케줄러"
+    },
+    "dashboard": {
+      "name": "Dash Dashboard",
+      "type": "python",
+      "auto_restart": true,
+      "command": "python paper_trading/dashboard.py",
+      "port": 8050,
+      "restart_interval_minutes": 60,
+      "max_memory_mb": 1000,
+      "description": "웹 대시보드 서버"
+    },
+    "trading_crew": {
+      "name": "Trading Crew Workflow",
+      "type": "python",
+      "auto_restart": true,
+      "command": "python paper_trading/trading_crew.py --strategy leader --top-n 10 --execute",
+      "restart_interval_minutes": 1440,
+      "max_memory_mb": 2000,
+      "description": "종목별 주도주 전략 기반 일일 매매 워크플로우"
+    }
+  },
+  "docker_containers": {
+    "investment_postgres": {
+      "name": "investment_postgres",
+      "image": "postgres:15-alpine",
+      "type": "database",
+      "port": 5432,
+      "auto_restart": true,
+      "description": "PostgreSQL 투자 데이터베이스"
+    },
+    "n8n": {
+      "name": "n8n",
+      "image": "n8nio/n8n",
+      "type": "automation",
+      "port": 5678,
+      "auto_restart": true,
+      "description": "N8N 자동화 플랫폼"
+    }
+  },
+  "services": {
+    "postgresql": {
+      "port": 5432,
+      "description": "PostgreSQL 데이터베이스"
+    },
+    "ollama": {
+      "port": 11434,
+      "description": "Ollama LLM 서버"
+    },
+    "n8n": {
+      "port": 5678,
+      "description": "N8N 자동화 플랫폼"
+    },
+    "dashboard": {
+      "port": 8050,
+      "description": "Dash 대시보드"
+    }
+  }
+}
