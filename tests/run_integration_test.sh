@@ -73,6 +73,11 @@ test_fail() {
     log_error "❌ $1"
 }
 
+test_warn() {
+    TOTAL_TESTS=$((TOTAL_TESTS + 1))
+    log_warn "$1"
+}
+
 separator() {
     echo "" | tee -a "$TEST_LOG"
     echo "============================================================" | tee -a "$TEST_LOG"
@@ -107,16 +112,20 @@ separator "Phase 1: 사전 준비 및 환경 검증"
 
 # 1.1 Docker 서비스 확인
 log_info "Docker 서비스 확인 중..."
-if docker ps | grep -q "investment_postgres"; then
-    test_pass "PostgreSQL 컨테이너 실행 중"
-else
-    test_fail "PostgreSQL 컨테이너가 실행되지 않음"
-fi
+if command -v docker > /dev/null 2>&1; then
+    if docker ps | grep -q "investment_postgres"; then
+        test_pass "PostgreSQL 컨테이너 실행 중"
+    else
+        test_fail "PostgreSQL 컨테이너가 실행되지 않음"
+    fi
 
-if docker ps | grep -q "n8n"; then
-    test_pass "n8n 컨테이너 실행 중"
+    if docker ps | grep -q "n8n"; then
+        test_pass "n8n 컨테이너 실행 중"
+    else
+        test_warn "n8n 컨테이너가 실행되지 않음 (선택사항)"
+    fi
 else
-    test_warn "n8n 컨테이너가 실행되지 않음 (선택사항)"
+    test_warn "Docker 명령을 찾을 수 없어 컨테이너 상태 체크를 건너뜁니다"
 fi
 
 # 1.2 Ollama 서버 확인

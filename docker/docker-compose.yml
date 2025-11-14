@@ -32,17 +32,16 @@ services:
     image: custom-n8n:latest
     container_name: n8n
     restart: unless-stopped
-    ports:
-      - "5678:5678"
+    user: "0:0"
+    network_mode: host
     environment:
-      DB_TYPE: mysqldb
-      DB_MYSQLDB_HOST: kocjun.synology.me
-      DB_MYSQLDB_PORT: "32778"
-      DB_MYSQLDB_DATABASE: AGENT
-      DB_MYSQLDB_USER: ${N8N_DB_USER:?set N8N_DB_USER in .env}
-      DB_MYSQLDB_PASSWORD: ${N8N_DB_PASSWORD:?set N8N_DB_PASSWORD in .env}
-      DB_MYSQLDB_PARAMS: useUnicode=true&characterEncoding=utf8mb4&connectionCollation=utf8mb4_unicode_ci
-      DB_MYSQLDB_CONNECTION_LIMIT: ${DB_MYSQLDB_CONNECTION_LIMIT-10}
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: ${N8N_DB_HOST:-postgres}
+      DB_POSTGRESDB_PORT: ${N8N_DB_PORT:-5432}
+      DB_POSTGRESDB_DATABASE: ${N8N_DB_NAME:-n8n_db}
+      DB_POSTGRESDB_SCHEMA: ${N8N_DB_SCHEMA:-public}
+      DB_POSTGRESDB_USER: ${N8N_DB_USER:?set N8N_DB_USER in .env}
+      DB_POSTGRESDB_PASSWORD: ${N8N_DB_PASSWORD:?set N8N_DB_PASSWORD in .env}
       N8N_BASIC_AUTH_ACTIVE: ${N8N_BASIC_AUTH_ACTIVE-true}
       N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER-admin}
       N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD:?set N8N_BASIC_AUTH_PASSWORD in .env}
@@ -51,6 +50,7 @@ services:
       N8N_RUNNERS_ENABLED: ${N8N_RUNNERS_ENABLED-true}
       N8N_BLOCK_ENV_ACCESS_IN_NODE: ${N8N_BLOCK_ENV_ACCESS_IN_NODE-false}
       N8N_GIT_NODE_DISABLE_BARE_REPOS: ${N8N_GIT_NODE_DISABLE_BARE_REPOS-true}
+      N8N_SECURE_COOKIE: ${N8N_SECURE_COOKIE-false}
     volumes:
       - ./n8n-data:/data
     depends_on:
