@@ -1,0 +1,110 @@
+{
+  "name": "시장 뉴스 이메일 발송 (Webhook)",
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {
+        "path": "market-news",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "name": "Webhook 수신",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $node[\"Webhook 수신\"].json.recipient_email || \"noreply@investment.com\" }}",
+        "toEmail": "={{ $node[\"Webhook 수신\"].json.recipient_email }}",
+        "subject": "{{ $node[\"Webhook 수신\"].json.subject || \"📰 오늘의 시장 뉴스\" }}",
+        "emailType": "html",
+        "htmlEmail": "={{ $node[\"Webhook 수신\"].json.html_content }}"
+      },
+      "name": "이메일 발송",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        500,
+        300
+      ],
+      "credentials": {
+        "smtp": "Gmail SMTP"
+      }
+    },
+    {
+      "parameters": {
+        "responseBody": "={\n  \"status\": \"success\",\n  \"message\": \"이메일이 발송되었습니다.\",\n  \"recipient\": \"{{ $node[\\\"Webhook 수신\\\"].json.recipient_email }}\"\n}",
+        "responseCode": 200
+      },
+      "name": "성공 응답",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        750,
+        250
+      ]
+    },
+    {
+      "parameters": {
+        "responseBody": "={\n  \"status\": \"error\",\n  \"message\": \"이메일 발송 중 오류가 발생했습니다.\"\n}",
+        "responseCode": 500
+      },
+      "name": "오류 응답",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        750,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook 수신": {
+      "main": [
+        [
+          {
+            "node": "이메일 발송",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "이메일 발송": {
+      "main": [
+        [
+          {
+            "node": "성공 응답",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "시장분석",
+      "createdAt": "2025-11-05"
+    },
+    {
+      "name": "뉴스",
+      "createdAt": "2025-11-05"
+    },
+    {
+      "name": "이메일",
+      "createdAt": "2025-11-05"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2025-11-05T00:00:00.000Z",
+  "versionId": "1.0.0"
+}

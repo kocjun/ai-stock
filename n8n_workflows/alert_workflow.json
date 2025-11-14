@@ -1,0 +1,126 @@
+{
+  "name": "주식 알림 자동화",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9,
+              "triggerAtMinute": 30
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "매일 오전 9시 30분 실행",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "command": "cd /Users/yeongchang.jeon/workspace/ai-agent && source .venv/bin/activate && python core/agents/alert_manager.py"
+      },
+      "id": "run-alert-manager",
+      "name": "Alert Manager 실행",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.output}}",
+              "operation": "contains",
+              "value2": "알림 발견"
+            }
+          ]
+        }
+      },
+      "id": "check-alerts",
+      "name": "알림 있는지 확인",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "url": "=YOUR_SLACK_WEBHOOK_URL",
+        "options": {
+          "bodyParametersJson": "={{ { \"text\": \"🔔 주식 알림\\n\\n\" + $json.output } }}"
+        }
+      },
+      "id": "send-slack",
+      "name": "Slack 알림 전송",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1000, 200]
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@yourcompany.com",
+        "toEmail": "your-email@example.com",
+        "subject": "🔔 주식 시장 알림",
+        "text": "={{$json.output}}"
+      },
+      "id": "send-email",
+      "name": "이메일 전송",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [1000, 400]
+    }
+  ],
+  "connections": {
+    "schedule-trigger": {
+      "main": [
+        [
+          {
+            "node": "run-alert-manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "run-alert-manager": {
+      "main": [
+        [
+          {
+            "node": "check-alerts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check-alerts": {
+      "main": [
+        [
+          {
+            "node": "send-slack",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "send-email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": ["stock", "alert", "automation"],
+  "triggerCount": 0,
+  "updatedAt": "2025-10-18T12:00:00.000Z",
+  "versionId": "1"
+}

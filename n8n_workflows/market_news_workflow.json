@@ -1,0 +1,183 @@
+{
+  "name": "매일 시장 뉴스 분석 및 이메일 발송",
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * 1-5"
+            }
+          ]
+        }
+      },
+      "name": "매일 오전 7시 실행 (평일)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "command": "cd /Users/yeongchang.jeon/workspace/ai-agent && source .venv/bin/activate && python core/agents/market_news_crew.py",
+        "additionalFields": {}
+      },
+      "name": "시장 뉴스 분석 실행",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$node[\"시장 뉴스 분석 실행\"].json[\"exitCode\"]}}",
+              "operation": "equals",
+              "value2": "0"
+            }
+          ]
+        }
+      },
+      "name": "실행 성공 확인",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$env[\"N8N_WEBHOOK_URL\"]}}",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={\n  \"type\": \"market_news_report\",\n  \"timestamp\": \"{{$now}}\",\n  \"message\": \"시장 뉴스 분석 완료\",\n  \"script_output\": \"{{$node['시장 뉴스 분석 실행'].json.stdout}}\"\n}"
+      },
+      "name": "성공 알림 발송",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        900,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$env[\"N8N_WEBHOOK_URL\"]}}",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={\n  \"type\": \"market_news_report\",\n  \"status\": \"error\",\n  \"timestamp\": \"{{$now}}\",\n  \"message\": \"시장 뉴스 분석 실패\",\n  \"error\": \"{{$node['시장 뉴스 분석 실행'].json.stderr}}\"\n}"
+      },
+      "name": "실패 알림 발송",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        900,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK",
+        "authentication": "none",
+        "requestMethod": "POST",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={\n  \"text\": \"📰 시장 뉴스 분석 완료\",\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": {\n        \"type\": \"plain_text\",\n        \"text\": \"📰 오늘의 시장 뉴스 분석\"\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"fields\": [\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*상태:* 완료\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*시간:* {{$now.format('YYYY-MM-DD HH:mm')}}\"\n        }\n      ]\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"오전 9시 발송을 위한 시장 뉴스 분석이 완료되었습니다.\"\n      }\n    }\n  ]\n}"
+      },
+      "name": "Slack 알림 (선택)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        200
+      ]
+    }
+  ],
+  "connections": {
+    "매일 오전 7시 실행 (평일)": {
+      "main": [
+        [
+          {
+            "node": "시장 뉴스 분석 실행",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "시장 뉴스 분석 실행": {
+      "main": [
+        [
+          {
+            "node": "실행 성공 확인",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "실행 성공 확인": {
+      "main": [
+        [
+          {
+            "node": "성공 알림 발송",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "실패 알림 발송",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "성공 알림 발송": {
+      "main": [
+        [
+          {
+            "node": "Slack 알림 (선택)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "시장분석",
+      "createdAt": "2025-11-01"
+    },
+    {
+      "name": "뉴스",
+      "createdAt": "2025-11-01"
+    },
+    {
+      "name": "자동화",
+      "createdAt": "2025-11-01"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2025-11-01T00:00:00.000Z",
+  "versionId": "1.0.0"
+}

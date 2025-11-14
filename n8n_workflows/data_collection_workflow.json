@@ -1,0 +1,199 @@
+{
+  "name": "한국 주식 데이터 수집 자동화",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 18
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "매일 18시 실행",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "crew-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook 수신",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 500],
+      "webhookId": "crew-data-collection"
+    },
+    {
+      "parameters": {
+        "command": "cd /data/ai-agent && source .venv/bin/activate && python core/agents/investment_crew.py"
+      },
+      "id": "run-crew",
+      "name": "CrewAI 실행",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.report}}",
+              "operation": "contains",
+              "value2": "성공"
+            }
+          ]
+        }
+      },
+      "id": "check-success",
+      "name": "성공 여부 확인",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "channel": "#ai-agent-alerts",
+        "text": "=✅ 한국 주식 데이터 수집 완료\n\n시장: {{$json.market}}\n종목 수: {{$json.limit}}\n기간: {{$json.days}}일\n\n{{$json.report}}",
+        "otherOptions": {}
+      },
+      "id": "slack-success",
+      "name": "Slack 알림 (성공)",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [1000, 200]
+    },
+    {
+      "parameters": {
+        "channel": "#ai-agent-alerts",
+        "text": "=⚠️ 데이터 수집 실패 또는 이슈 발생\n\n{{$json.report}}",
+        "otherOptions": {}
+      },
+      "id": "slack-failure",
+      "name": "Slack 알림 (실패)",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [1000, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=INSERT INTO data_collection_logs (timestamp, market, limit_count, days, status, report) VALUES ('{{$json.timestamp}}', '{{$json.market}}', {{$json.limit}}, {{$json.days}}, 'success', '{{$json.report}}')",
+        "options": {}
+      },
+      "id": "log-to-db",
+      "name": "PostgreSQL 로그 저장",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [1250, 300],
+      "credentials": {
+        "postgres": {
+          "id": "investment-postgres",
+          "name": "Investment PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"success\", \"message\": \"Data collection workflow triggered\", \"timestamp\": $now } }}"
+      },
+      "id": "webhook-response",
+      "name": "Webhook 응답",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1250, 500]
+    }
+  ],
+  "connections": {
+    "schedule-trigger": {
+      "main": [
+        [
+          {
+            "node": "run-crew",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "webhook-trigger": {
+      "main": [
+        [
+          {
+            "node": "check-success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "run-crew": {
+      "main": [
+        [
+          {
+            "node": "check-success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "check-success": {
+      "main": [
+        [
+          {
+            "node": "slack-success",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "log-to-db",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "slack-failure",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "log-to-db",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "log-to-db": {
+      "main": [
+        [
+          {
+            "node": "webhook-response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": ["stock", "data-collection", "automation"],
+  "triggerCount": 0,
+  "updatedAt": "2025-10-12T12:00:00.000Z",
+  "versionId": "1"
+}

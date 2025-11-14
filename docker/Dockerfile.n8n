@@ -1,0 +1,39 @@
+ARG NODE_VERSION=20-alpine
+FROM node:${NODE_VERSION}
+
+ARG N8N_VERSION=latest
+
+ENV NODE_ENV=production \
+    N8N_VERSION=${N8N_VERSION} \
+    N8N_USER_FOLDER=/data \
+    N8N_CUSTOM_EXTENSIONS=/data/extensions \
+    N8N_PORT=5678 \
+    GENERIC_TIMEZONE=Asia/Seoul
+
+# 패키지 의존성과 런타임 사용자 추가
+RUN apk add --no-cache \
+        bash \
+        curl \
+        graphicsmagick \
+        libc6-compat \
+        openssl \
+        python3 \
+        tzdata \
+        tini \
+        su-exec \
+    && adduser -D -h /home/n8n n8n \
+    && npm config set update-notifier false \
+    && npm install -g --unsafe-perm n8n@${N8N_VERSION} \
+    && mkdir -p /data/.n8n /data/files /data/extensions /home/n8n/.n8n \
+    && chown -R n8n:n8n /data /home/n8n
+
+WORKDIR /home/n8n
+
+VOLUME ["/data"]
+
+EXPOSE 5678
+
+USER n8n
+
+ENTRYPOINT ["tini", "--", "n8n"]
+CMD ["start"]

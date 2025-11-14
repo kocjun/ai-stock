@@ -1,0 +1,62 @@
+services:
+  # PostgreSQL 데이터베이스
+  postgres:
+    image: postgres:15-alpine
+    container_name: investment_postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ${DB_NAME:-investment_db}
+      POSTGRES_USER: ${DB_USER:-invest_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      PGDATA: /var/lib/postgresql/data/pgdata
+      TZ: Asia/Seoul
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-invest_user} -d ${DB_NAME:-investment_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # n8n 워크플로 자동화
+  n8n:
+    build:
+      context: .
+      dockerfile: Dockerfile.n8n
+      args:
+        NODE_VERSION: ${NODE_VERSION-20-alpine}
+        N8N_VERSION: ${N8N_VERSION-latest}
+    image: custom-n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      DB_TYPE: mysqldb
+      DB_MYSQLDB_HOST: kocjun.synology.me
+      DB_MYSQLDB_PORT: "32778"
+      DB_MYSQLDB_DATABASE: AGENT
+      DB_MYSQLDB_USER: ${N8N_DB_USER:?set N8N_DB_USER in .env}
+      DB_MYSQLDB_PASSWORD: ${N8N_DB_PASSWORD:?set N8N_DB_PASSWORD in .env}
+      DB_MYSQLDB_PARAMS: useUnicode=true&characterEncoding=utf8mb4&connectionCollation=utf8mb4_unicode_ci
+      DB_MYSQLDB_CONNECTION_LIMIT: ${DB_MYSQLDB_CONNECTION_LIMIT-10}
+      N8N_BASIC_AUTH_ACTIVE: ${N8N_BASIC_AUTH_ACTIVE-true}
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER-admin}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD:?set N8N_BASIC_AUTH_PASSWORD in .env}
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE-Asia/Seoul}
+      N8N_PORT: ${N8N_PORT-5678}
+      N8N_RUNNERS_ENABLED: ${N8N_RUNNERS_ENABLED-true}
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: ${N8N_BLOCK_ENV_ACCESS_IN_NODE-false}
+      N8N_GIT_NODE_DISABLE_BARE_REPOS: ${N8N_GIT_NODE_DISABLE_BARE_REPOS-true}
+    volumes:
+      - ./n8n-data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+networks:
+  default:
+    name: investment_network

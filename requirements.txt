@@ -1,0 +1,27 @@
+# CrewAI 및 AI 프레임워크
+crewai==0.80.0
+crewai-tools==0.17.0
+langchain==0.3.13
+openai==1.59.7
+
+# 데이터 수집 및 분석
+finance-datareader==0.9.96
+pandas==2.2.3
+numpy>=1.22.4,<2
+
+# 데이터베이스
+psycopg2-binary==2.9.11
+
+# 유틸리티
+python-dotenv==1.0.1
+requests==2.32.5
+tqdm==4.67.1
+
+# 시각화 및 대시보드
+plotly==6.3.1
+dash==2.18.2
+dash-bootstrap-components==1.6.0
+
+# 기타 의존성
+beautifulsoup4==4.14.2
+lxml==6.0.2
