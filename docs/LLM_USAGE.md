@@ -29,6 +29,8 @@ OPENAI_MODEL_NAME=gpt-oss:120b
 REDTEAM_MODEL=gpt-4o-mini
 ```
 
+> NAS와 같이 원격 LLM 서버를 사용할 경우 `OPENAI_API_BASE`에 내부망 주소(예: `http://192.168.10.58:11434`)를 지정하면 됩니다. 실행 스크립트/테스트는 해당 값을 자동으로 참조합니다.
+
 ### 사용 가능한 모델
 
 #### Ollama 로컬 모델 (무료)

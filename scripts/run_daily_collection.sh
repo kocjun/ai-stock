@@ -8,8 +8,19 @@ set -e  # 에러 발생 시 중단
 
 # 설정
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 LOG_DIR="${SCRIPT_DIR}/logs"
 LOG_FILE="${LOG_DIR}/collection_$(date +%Y%m%d_%H%M%S).log"
+
+# 환경 변수 로드 (.env가 있으면)
+if [ -f "${PROJECT_ROOT}/.env" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "${PROJECT_ROOT}/.env"
+    set +a
+fi
+
+LLM_BASE_URL="${OPENAI_API_BASE:-http://127.0.0.1:11434}"
 
 # 로그 디렉터리 생성
 mkdir -p "${LOG_DIR}"
@@ -36,9 +47,10 @@ fi
 log "✓ PostgreSQL 컨테이너 실행 중"
 
 # Ollama 서버 확인
-if ! curl -s http://localhost:11434/api/tags > /dev/null; then
+if ! curl -s "${LLM_BASE_URL}/api/tags" > /dev/null; then
     log "✗ Ollama 서버에 연결할 수 없습니다."
-    log "ollama serve 를 실행하세요."
+    log "서버 주소: ${LLM_BASE_URL}"
+    log "ollama serve 를 실행하거나 네트워크 설정을 확인하세요."
     exit 1
 fi
 log "✓ Ollama 서버 연결 성공"
