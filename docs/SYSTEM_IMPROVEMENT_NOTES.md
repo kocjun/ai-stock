@@ -4,12 +4,12 @@
 
 ## 1. 데이터 파이프라인 안정화
 - **초기 데이터 시딩 자동화**  
-  - README 또는 부팅 스크립트에서 `core/agents/investment_crew.py` 실행을 안내해 DB에 충분한 종목/가격 데이터를 확보하도록 한다.  
-  - `tests/run_integration_test.sh`에서 데이터 부족 시 구체적 해결 방법(스크립트 링크)을 출력하면 운영자가 즉시 조치 가능.
+  - `scripts/bootstrap_data.py`를 추가해 주식/가격 수집이 부족하거나 오래된 경우 `investment_crew`를 자동 실행하도록 했다.  
+  - README의 초기 설정 절차에 Docker 컨테이너에서 해당 스크립트를 실행하는 방법을 추가했다.
 - **가상 계좌/포트폴리오 기본값**  
-  - `paper_trading` 관련 테이블에 초기 계좌/현금 데이터를 삽입하는 SQL 또는 관리 스크립트를 추가해 테스트 실패를 줄인다.
+  - 같은 스크립트에서 `paper_trading/schema.sql`을 적용하고 `virtual_accounts` 테이블에 기본 계좌를 생성해 통합 테스트가 즉시 통과하도록 했다.
 - **DB 헬스체크 스크립트**  
-  - `system_monitor`에 Postgres 전용 헬스체크 및 자동 재시작 옵션 추가. 현재는 포트만 확인하므로 연결까지 확인하도록 개선한다.
+  - (추가 예정) `system_monitor`에 Postgres 전용 헬스체크 및 자동 재시작 옵션 추가. 현재는 포트만 확인하므로 연결까지 확인하도록 개선한다.
 
 ## 2. LLM 연동 신뢰성
 - **응답 타임아웃/재시도**  
