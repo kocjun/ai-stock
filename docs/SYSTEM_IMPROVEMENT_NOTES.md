@@ -12,16 +12,16 @@
   - (추가 예정) `system_monitor`에 Postgres 전용 헬스체크 및 자동 재시작 옵션 추가. 현재는 포트만 확인하므로 연결까지 확인하도록 개선한다.
 
 ## 2. LLM 연동 신뢰성
-- **응답 타임아웃/재시도**  
-  - CrewAI 레이어에서 `ValueError: Invalid response ... None or empty`는 LLM 응답 지연 때문. `core/utils/llm_utils.py`에서 사용자 정의 LLM 래퍼를 둬 재시도 또는 graceful fallback(모델 교체)을 구현한다.
-- **모델/자원 모니터링**  
-  - 내부망 LLM 서버 상태(메모리, 모델 로드)를 Prometheus/간단한 쉘 스크립트로 주기적 확인 후 NAS에 알림 전송. 현재는 수동 `curl`로만 확인 가능.
+- **모델 자동 전환**  
+  - `core/utils/llm_utils.py`에서 Ollama `/api/tags`를 조회해 기본 모델이 로드되지 않았을 때 `OPENAI_MODEL_FALLBACK`으로 자동 전환하도록 구현했다. `.env`, README, `docs/LLM_USAGE.md`에 새 변수를 추가해 운영 중에도 가벼운 모델로 쉽게 스위치할 수 있다.
+- **모델/자원 모니터링 (추가 예정)**  
+  - 내부망 LLM 서버 상태(메모리, 모델 로드)를 Prometheus/간단한 쉘 스크립트로 주기적 확인 후 NAS에 알림 전송. 현재는 수동 `curl`로만 확인 가능하므로 향후 n8n 또는 system_monitor와 연계가 필요하다.
 - **여러 모델 지원**  
   - `.env`에 `OPENAI_MODEL_NAME_FALLBACK` 등을 추가해 메인 모델 이상 시 자동으로 8B 모델로 스위칭하도록 개선.
 
 ## 3. Docker / 인프라 구조
 - **host network 의존 최소화**  
-  - `ai-stock-app`과 `n8n`이 `network_mode: host`에 의존 중이다. 가능하다면 브리지 네트워크 사용 + Postgres 서비스 이름(hostname)으로 접근하도록 NAS 방화벽 설정을 조정해 분리도를 높인다.
+  - `ai-stock-app`, `n8n` 모두 `network_mode: host`를 제거하고 기본 브리지 네트워크에서 동작하도록 수정했다. Postgres 접속도 `DB_HOST=postgres`로 통일해 서비스명으로 접근한다.
 - **볼륨 권한 관리**  
   - n8n 데이터(`/data/.n8n`) 권한 문제를 해결하기 위해 컨테이너에서 root로 실행 중이다. NAS 파일 권한을 맞추고 비루트 계정으로 돌아가면 보안 위험을 낮출 수 있다.
 - **환경변수 전달 통일**  

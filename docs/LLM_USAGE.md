@@ -24,6 +24,7 @@ LLM_MODE=main
 # 로컬 LLM 설정 (메인 - Ollama)
 OPENAI_API_BASE=http://127.0.0.1:11434
 OPENAI_MODEL_NAME=gpt-oss:120b
+OPENAI_MODEL_FALLBACK=llama3.1:8b
 
 # 레드팀 검증용 (OpenAI)
 REDTEAM_MODEL=gpt-4o-mini
