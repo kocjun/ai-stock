@@ -117,6 +117,14 @@ source .venv/bin/activate
 python core/utils/collect_data.py
 ```
 
+> Docker 컨테이너(`ai-stock-app`)에서 운영한다면 다음 명령으로 종목/가격 데이터와 가상 계좌를 한 번에 부트스트랩할 수 있습니다.
+>
+> ```bash
+> cd docker
+> docker compose --env-file ../.env exec ai-stock-app \
+>   bash -lc "python scripts/bootstrap_data.py"
+> ```
+
 ### 5. 자동화 설정
 
 ```bash
