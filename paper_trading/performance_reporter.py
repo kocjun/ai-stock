@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timedelta
 import numpy as np
+import pandas as pd
 
 # 프로젝트 루트 경로 추가 (Cron 실행 시에도 작동하도록 우선순위 높임)
 project_root = Path(__file__).parent.parent
@@ -25,6 +26,7 @@ try:
         get_trade_history
     )
     from paper_trading.paper_trading import get_portfolio
+    from paper_trading import dashboard_data as dd
 except ImportError:
     # paper_trading 디렉토리에서 직접 실행하는 경우 대비
     from portfolio_manager import (
@@ -32,6 +34,7 @@ except ImportError:
         get_trade_history
     )
     from paper_trading import get_portfolio
+    from paper_trading import dashboard_data as dd
     import sys
     sys.path.insert(0, str(project_root))
     from core.utils.db_utils import get_db_connection
@@ -153,6 +156,32 @@ def generate_performance_report(account_id: int, period_days: int = 7,
     # 거래 히스토리
     trades = get_trade_history(account_id, limit=period_days * 5)  # 기간 내 거래
 
+    equity_stats = dd.get_equity_extremes(account_id, days=max(period_days, 180))
+    positions_df = dd.get_portfolio_positions(account_id)
+    ai_insights = dd.get_holding_ai_analysis(account_id)
+    ai_map = {item.get("code"): item for item in ai_insights}
+
+    enriched_positions: List[Dict] = []
+    if isinstance(positions_df, pd.DataFrame) and len(positions_df) > 0:
+        for _, row in positions_df.iterrows():
+            code = row.get("code")
+            ai_data = ai_map.get(code, {})
+            enriched_positions.append({
+                "code": code,
+                "name": row.get("name"),
+                "sector": row.get("sector"),
+                "quantity": float(row.get("quantity") or 0),
+                "avg_price": float(row.get("avg_price") or 0),
+                "current_price": float(row.get("current_price") or 0),
+                "current_value": float(row.get("current_value") or 0),
+                "profit_loss": float(row.get("profit_loss") or 0),
+                "profit_loss_pct": float(row.get("profit_loss_pct") or 0),
+                "first_buy_date": row.get("first_buy_date").strftime("%Y-%m-%d") if pd.notnull(row.get("first_buy_date")) else None,
+                "buy_rationale": ai_data.get("buy_rationale")
+            })
+    else:
+        enriched_positions = portfolio["positions"]
+
     # 보고서 데이터
     report = {
         'report_type': report_type,
@@ -183,9 +212,11 @@ def generate_performance_report(account_id: int, period_days: int = 7,
         'volatility': volatility,
 
         # 상세 데이터
-        'positions': portfolio['positions'],
+        'positions': enriched_positions,
         'recent_trades': trades[:10],  # 최근 10개 거래
-        'daily_history': history[:period_days]
+        'daily_history': history[:period_days],
+        'equity_stats': equity_stats,
+        'ai_analysis': ai_insights
     }
 
     return report
@@ -194,61 +225,64 @@ def generate_performance_report(account_id: int, period_days: int = 7,
 def format_html_report(report: Dict) -> str:
     """
     보고서를 HTML 이메일 형식으로 포맷팅
-
-    Args:
-        report: 보고서 데이터
-
-    Returns:
-        str: HTML 텍스트
     """
-    # 보고서 유형 이름
     report_type_name = {
-        'daily': '일간',
-        'weekly': '주간',
-        'monthly': '월간'
-    }.get(report['report_type'], '투자')
+        "daily": "일간",
+        "weekly": "주간",
+        "monthly": "월간"
+    }.get(report["report_type"], "투자")
 
-    # 날짜 포맷팅
     try:
-        generated_at = datetime.fromisoformat(report['generated_at'])
-        date_str = generated_at.strftime('%Y년 %m월 %d일 %H:%M')
-    except:
-        date_str = report['generated_at']
+        generated_at = datetime.fromisoformat(report["generated_at"])
+        date_str = generated_at.strftime("%Y년 %m월 %d일 %H:%M")
+    except Exception:
+        date_str = report["generated_at"]
 
-    # 수익률 색상
-    return_pct = report.get('total_return_pct', 0)
+    return_pct = report.get("total_return_pct", 0)
     return_color = "#10b981" if return_pct >= 0 else "#ef4444"
     return_sign = "+" if return_pct >= 0 else ""
 
-    # 포지션 테이블
+    equity_stats = report.get("equity_stats", {}) or {}
+    peak_value = equity_stats.get("peak_value", 0.0)
+    peak_date = equity_stats.get("peak_date") or "-"
+    peak_gain = equity_stats.get("peak_gain", 0.0)
+    peak_return_pct = equity_stats.get("peak_return_pct", 0.0)
+    drawdown_pct = equity_stats.get("drawdown_pct", 0.0)
+
     positions_rows = ""
-    if report.get('positions'):
-        for pos in report['positions']:
-            profit_loss = pos.get('profit_loss', 0)
-            profit_loss_pct = pos.get('profit_loss_pct', 0)
+    if report.get("positions"):
+        for pos in report["positions"]:
+            profit_loss = pos.get("profit_loss", 0)
+            profit_loss_pct = pos.get("profit_loss_pct", 0)
             profit_color = "#10b981" if profit_loss >= 0 else "#ef4444"
             profit_sign = "+" if profit_loss >= 0 else ""
+            sector = pos.get("sector") or "-"
+            buy_rationale = pos.get("buy_rationale") or "-"
+            first_buy = pos.get("first_buy_date") or "-"
 
             positions_rows += f"""
             <tr>
                 <td style="padding: 10px; border: 1px solid #ddd; font-weight: bold;">{pos.get('code', 'N/A')}</td>
                 <td style="padding: 10px; border: 1px solid #ddd;">{pos.get('name', 'N/A')}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{sector}</td>
                 <td style="padding: 10px; border: 1px solid #ddd; text-align: right;">{pos.get('quantity', 0):,}주</td>
                 <td style="padding: 10px; border: 1px solid #ddd; text-align: right;">{pos.get('avg_price', 0):,.0f}원</td>
                 <td style="padding: 10px; border: 1px solid #ddd; text-align: right;">{pos.get('current_price', 0):,.0f}원</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{first_buy}</td>
                 <td style="padding: 10px; border: 1px solid #ddd; text-align: right; color: {profit_color};">{profit_sign}{profit_loss:,.0f}원</td>
                 <td style="padding: 10px; border: 1px solid #ddd; text-align: right; color: {profit_color};">{profit_sign}{profit_loss_pct:.2f}%</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{buy_rationale}</td>
             </tr>
             """
     else:
-        positions_rows = '<tr><td colspan="7" style="padding: 10px; text-align: center; color: #999;">보유 종목 없음</td></tr>'
+        positions_rows = '<tr><td colspan="10" style="padding: 10px; text-align: center; color: #999;">보유 종목 없음</td></tr>'
 
-    # 최근 거래 테이블
     trades_rows = ""
-    if report.get('recent_trades'):
-        for trade in report['recent_trades'][:10]:
-            trade_type = "매수" if trade.get('trade_type') == 'buy' else "매도"
-            trade_date = trade.get('trade_date', 'N/A')[:10]
+    if report.get("recent_trades"):
+        for trade in report["recent_trades"][:10]:
+            trade_type = "매수" if trade.get("trade_type") == "buy" else "매도"
+            trade_date = trade.get("trade_date", "N/A")[:10]
+            reason = trade.get("reason") or "-"
 
             trades_rows += f"""
             <tr>
@@ -259,10 +293,25 @@ def format_html_report(report: Dict) -> str:
                 <td style="padding: 10px; border: 1px solid #ddd; text-align: right;">{trade.get('quantity', 0):,}주</td>
                 <td style="padding: 10px; border: 1px solid #ddd; text-align: right;">{trade.get('price', 0):,.0f}원</td>
                 <td style="padding: 10px; border: 1px solid #ddd; text-align: right; font-weight: bold;">{trade.get('total_amount', 0):,.0f}원</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{reason}</td>
             </tr>
             """
     else:
-        trades_rows = '<tr><td colspan="7" style="padding: 10px; text-align: center; color: #999;">거래 내역 없음</td></tr>'
+        trades_rows = '<tr><td colspan="8" style="padding: 10px; text-align: center; color: #999;">거래 내역 없음</td></tr>'
+
+    rationale_rows = ""
+    if report.get("positions"):
+        for pos in report["positions"]:
+            rationale = pos.get("buy_rationale")
+            if rationale:
+                rationale_rows += f"""
+                <div style="margin-bottom:10px;">
+                    <strong>{pos.get('code', 'N/A')} ({pos.get('name', 'N/A')})</strong><br/>
+                    <span style="color:#4b5563;">{rationale}</span>
+                </div>
+                """
+    if not rationale_rows:
+        rationale_rows = '<p style="color:#777;">AI 분석 기반 매수 사유가 등록되지 않았습니다.</p>'
 
     html = f"""
     <!DOCTYPE html>
@@ -363,6 +412,24 @@ def format_html_report(report: Dict) -> str:
                         <div class="stat-label">수익률</div>
                     </div>
                 </div>
+                <div class="stats" style="margin-top: 10px;">
+                    <div class="stat-box">
+                        <div class="stat-value">{peak_value:,.0f}원</div>
+                        <div class="stat-label">최고 자산</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value">{peak_return_pct:+.2f}%</div>
+                        <div class="stat-label">최고 수익률</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value">{drawdown_pct:+.2f}%</div>
+                        <div class="stat-label">현재 낙폭</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value">{peak_date}</div>
+                        <div class="stat-label">최고점 기록</div>
+                    </div>
+                </div>
             </div>
 
             <div class="section">
@@ -418,11 +485,14 @@ def format_html_report(report: Dict) -> str:
                         <tr>
                             <th>종목코드</th>
                             <th>종목명</th>
+                            <th>섹터</th>
                             <th style="text-align: right;">수량</th>
                             <th style="text-align: right;">평균가</th>
                             <th style="text-align: right;">현재가</th>
+                            <th>첫 매수일</th>
                             <th style="text-align: right;">손익</th>
                             <th style="text-align: right;">수익률</th>
+                            <th>매수 근거</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -443,12 +513,18 @@ def format_html_report(report: Dict) -> str:
                             <th style="text-align: right;">수량</th>
                             <th style="text-align: right;">가격</th>
                             <th style="text-align: right;">금액</th>
+                            <th>사유</th>
                         </tr>
                     </thead>
                     <tbody>
                         {trades_rows}
                     </tbody>
                 </table>
+            </div>
+
+            <div class="section">
+                <h2>🧠 분석 기반 매수/매도 사유</h2>
+                {rationale_rows}
             </div>
 
             <div class="footer">
