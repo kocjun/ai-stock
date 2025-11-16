@@ -124,7 +124,8 @@ def create_portfolio_section():
         dbc.CardBody([
             dbc.Row([
                 dbc.Col([
-                    html.Div(id="account-metrics")
+                    html.Div(id="account-metrics"),
+                    html.Div(id="equity-highlight-cards", className="mt-3")
                 ], md=12, lg=8),
                 dbc.Col([
                     dcc.Graph(id="portfolio-pie-chart", config={'displayModeBar': False})
@@ -132,7 +133,10 @@ def create_portfolio_section():
             ]),
             html.Hr(),
             html.H6("보유 종목", className="mb-3"),
-            html.Div(id="portfolio-table")
+            html.Div(id="portfolio-table"),
+            html.Hr(),
+            html.H6("보유 종목 손익", className="mb-3"),
+            dcc.Graph(id="position-profit-chart", config={'displayModeBar': False})
         ])
     ], className="mb-4")
 
@@ -242,8 +246,10 @@ def create_trades_section():
 @app.callback(
     [
         Output("account-metrics", "children"),
+        Output("equity-highlight-cards", "children"),
         Output("portfolio-table", "children"),
         Output("portfolio-pie-chart", "figure"),
+        Output("position-profit-chart", "figure"),
         Output("performance-metrics", "children"),
         Output("performance-insights", "children"),
         Output("value-history-chart", "figure"),
@@ -276,6 +282,7 @@ def update_dashboard(n_intervals, n_clicks, range_days, benchmark_code):
             print(f"포트폴리오 업데이트 실패: {e}")
 
     metrics = dd.get_performance_metrics(ACCOUNT_ID)
+    equity_stats = dd.get_equity_extremes(ACCOUNT_ID, days=max(range_days, 180))
 
     cash_ratio = (summary['cash_balance'] / summary['total_value'] * 100) if summary['total_value'] else 0.0
 
@@ -310,6 +317,41 @@ def update_dashboard(n_intervals, n_clicks, range_days, benchmark_code):
                 format_currency(summary['total_return']),
                 format_percent(summary['return_pct']),
                 get_color_by_value(summary['total_return'])
+            )
+        ], md=6, lg=3)
+    ], className="g-3")
+
+    equity_cards = dbc.Row([
+        dbc.Col([
+            create_metric_card(
+                "누적 수익",
+                format_currency(summary['total_return']),
+                format_percent(summary['return_pct']),
+                get_color_by_value(summary['total_return'])
+            )
+        ], md=6, lg=3),
+        dbc.Col([
+            create_metric_card(
+                "최고 자산",
+                format_currency(equity_stats['peak_value']),
+                equity_stats.get('peak_date') or "-",
+                "info"
+            )
+        ], md=6, lg=3),
+        dbc.Col([
+            create_metric_card(
+                "최고 수익률",
+                format_percent(equity_stats['peak_return_pct']),
+                f"{format_currency(equity_stats['peak_gain'])} 증가",
+                get_color_by_value(equity_stats['peak_return_pct'])
+            )
+        ], md=6, lg=3),
+        dbc.Col([
+            create_metric_card(
+                "현재 낙폭",
+                format_percent(equity_stats['drawdown_pct']),
+                "최고점 대비",
+                get_color_by_value(equity_stats['drawdown_pct'])
             )
         ], md=6, lg=3)
     ], className="g-3")
@@ -397,6 +439,24 @@ def update_dashboard(n_intervals, n_clicks, range_days, benchmark_code):
             margin=dict(t=40, b=0, l=0, r=0),
             height=300
         )
+
+        profit_df = positions_df.sort_values('profit_loss', ascending=False)
+        profit_colors = ['#198754' if val >= 0 else '#dc3545' for val in profit_df['profit_loss']]
+        position_profit_fig = go.Figure()
+        position_profit_fig.add_trace(go.Bar(
+            x=profit_df['name'],
+            y=profit_df['profit_loss'],
+            marker_color=profit_colors,
+            text=profit_df['profit_loss_pct'].apply(lambda x: f"{x:+.2f}%"),
+            textposition='outside'
+        ))
+        position_profit_fig.update_layout(
+            margin=dict(t=30, b=80),
+            height=320,
+            xaxis_tickangle=-30,
+            yaxis_title="평가손익 (₩)",
+            title="보유 종목 손익"
+        )
     else:
         portfolio_table = html.P("보유 종목이 없습니다.", className="text-muted")
         pie_fig = go.Figure()
@@ -407,6 +467,17 @@ def update_dashboard(n_intervals, n_clicks, range_days, benchmark_code):
             font=dict(size=16, color="gray")
         )
         pie_fig.update_layout(
+            margin=dict(t=40, b=0, l=0, r=0),
+            height=300
+        )
+        position_profit_fig = go.Figure()
+        position_profit_fig.add_annotation(
+            text="표시할 종목이 없습니다",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False,
+            font=dict(size=16, color="gray")
+        )
+        position_profit_fig.update_layout(
             margin=dict(t=40, b=0, l=0, r=0),
             height=300
         )
@@ -626,8 +697,10 @@ def update_dashboard(n_intervals, n_clicks, range_days, benchmark_code):
 
     return (
         account_metrics,
+        equity_cards,
         portfolio_table,
         pie_fig,
+        position_profit_fig,
         performance_metrics,
         insights_content,
         value_fig,

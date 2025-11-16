@@ -239,6 +239,48 @@ def get_performance_metrics(account_id: int = 1) -> Dict:
     }
 
 
+def get_equity_extremes(account_id: int = 1, days: int = 180) -> Dict:
+    """
+    최고 자산/현재 낙폭 등 요약.
+    """
+    history_df = get_portfolio_history(account_id, days)
+
+    if len(history_df) == 0:
+        return {
+            'peak_value': 0.0,
+            'peak_date': None,
+            'peak_return_pct': 0.0,
+            'peak_gain': 0.0,
+            'current_value': 0.0,
+            'current_return_pct': 0.0,
+            'drawdown_pct': 0.0
+        }
+
+    history_df = history_df.sort_values('snapshot_date')
+    base_value = float(history_df['total_value'].iloc[0])
+    current_value = float(history_df['total_value'].iloc[-1])
+
+    peak_idx = history_df['total_value'].idxmax()
+    peak_row = history_df.loc[peak_idx]
+    peak_value = float(peak_row['total_value'])
+    peak_date = peak_row['snapshot_date'].strftime('%Y-%m-%d') if pd.notnull(peak_row['snapshot_date']) else None
+
+    peak_return_pct = ((peak_value - base_value) / base_value * 100) if base_value else 0.0
+    peak_gain = peak_value - base_value
+    current_return_pct = ((current_value - base_value) / base_value * 100) if base_value else 0.0
+    drawdown_pct = ((current_value - peak_value) / peak_value * 100) if peak_value else 0.0
+
+    return {
+        'peak_value': peak_value,
+        'peak_date': peak_date,
+        'peak_return_pct': peak_return_pct,
+        'peak_gain': peak_gain,
+        'current_value': current_value,
+        'current_return_pct': current_return_pct,
+        'drawdown_pct': drawdown_pct
+    }
+
+
 def get_portfolio_history(account_id: int = 1, days: int = 30) -> pd.DataFrame:
     """
     포트폴리오 히스토리 조회
