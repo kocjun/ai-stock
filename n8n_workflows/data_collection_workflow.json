@@ -16,7 +16,10 @@
       "name": "매일 18시 실행",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
-      "position": [250, 300]
+      "position": [
+        250,
+        300
+      ]
     },
     {
       "parameters": {
@@ -29,7 +32,10 @@
       "name": "Webhook 수신",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [250, 500],
+      "position": [
+        250,
+        500
+      ],
       "webhookId": "crew-data-collection"
     },
     {
@@ -40,7 +46,10 @@
       "name": "CrewAI 실행",
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
-      "position": [500, 300]
+      "position": [
+        500,
+        300
+      ]
     },
     {
       "parameters": {
@@ -58,7 +67,10 @@
       "name": "성공 여부 확인",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [750, 300]
+      "position": [
+        750,
+        300
+      ]
     },
     {
       "parameters": {
@@ -70,7 +82,10 @@
       "name": "Slack 알림 (성공)",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 1,
-      "position": [1000, 200]
+      "position": [
+        1000,
+        200
+      ]
     },
     {
       "parameters": {
@@ -82,7 +97,10 @@
       "name": "Slack 알림 (실패)",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 1,
-      "position": [1000, 400]
+      "position": [
+        1000,
+        400
+      ]
     },
     {
       "parameters": {
@@ -94,7 +112,10 @@
       "name": "PostgreSQL 로그 저장",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2,
-      "position": [1250, 300],
+      "position": [
+        1250,
+        300
+      ],
       "credentials": {
         "postgres": {
           "id": "investment-postgres",
@@ -111,76 +132,79 @@
       "name": "Webhook 응답",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [1250, 500]
+      "position": [
+        1250,
+        500
+      ]
     }
   ],
   "connections": {
-    "schedule-trigger": {
+    "매일 18시 실행": {
       "main": [
         [
           {
-            "node": "run-crew",
+            "node": "CrewAI 실행",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "webhook-trigger": {
+    "Webhook 수신": {
       "main": [
         [
           {
-            "node": "check-success",
+            "node": "성공 여부 확인",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "run-crew": {
+    "CrewAI 실행": {
       "main": [
         [
           {
-            "node": "check-success",
+            "node": "성공 여부 확인",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "check-success": {
+    "성공 여부 확인": {
       "main": [
         [
           {
-            "node": "slack-success",
+            "node": "Slack 알림 (성공)",
             "type": "main",
             "index": 0
           },
           {
-            "node": "log-to-db",
+            "node": "PostgreSQL 로그 저장",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "slack-failure",
+            "node": "Slack 알림 (실패)",
             "type": "main",
             "index": 0
           },
           {
-            "node": "log-to-db",
+            "node": "PostgreSQL 로그 저장",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "log-to-db": {
+    "PostgreSQL 로그 저장": {
       "main": [
         [
           {
-            "node": "webhook-response",
+            "node": "Webhook 응답",
             "type": "main",
             "index": 0
           }
@@ -192,7 +216,11 @@
     "executionOrder": "v1"
   },
   "staticData": null,
-  "tags": ["stock", "data-collection", "automation"],
+  "tags": [
+    "stock",
+    "data-collection",
+    "automation"
+  ],
   "triggerCount": 0,
   "updatedAt": "2025-10-12T12:00:00.000Z",
   "versionId": "1"

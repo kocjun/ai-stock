@@ -12,9 +12,29 @@ import requests
 from datetime import datetime
 from pathlib import Path
 
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
+
 # 프로젝트 루트 디렉토리 추가
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
+
+# .env를 직접 로드하여 스크립트 단독 실행 시에도 동일한 환경을 보장
+env_path = project_root / ".env"
+if env_path.exists():
+    if load_dotenv:
+        load_dotenv(env_path)
+    else:
+        # python-dotenv가 없어도 기본 KEY=VALUE 형식만큼은 수동으로 읽어서 설정
+        for line in env_path.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            value = value.strip().strip('"').strip("'")
+            os.environ.setdefault(key.strip(), value)
 
 def create_test_html_report():
     """테스트용 HTML 보고서 생성"""
