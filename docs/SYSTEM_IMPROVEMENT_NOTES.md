@@ -28,8 +28,8 @@
   - `.env`를 여러 스크립트에서 직접 `source`하고 있어 파편화 가능. `scripts/load_env.sh` 같은 공통 로더를 두면 유지보수가 쉬워진다.
 
 ## 4. 테스트 및 관측성
-- **컨테이너 내부 테스트 공식화**  
-  - README/plan.md에 “모든 테스트는 `docker compose exec ai-stock-app` 안에서 실행한다”는 지침을 명시해 혼선을 줄인다.
+- **컨테이너 내부 테스트 실행 스크립트**  
+  - `scripts/run_tests_in_container.sh`를 추가해 `docker compose exec ai-stock-app ...` 명령을 감싸도록 했다. README에도 스크립트 사용법을 안내해 일관된 테스트 절차를 보장한다.
 - **테스트 결과 요약 자동화**  
   - `tests/run_integration_test.sh` 실행 후 n8n 또는 Slack으로 로그 요약을 전송하는 훅을 넣으면 수동 확인 부담이 줄어든다.
 - **로그 관리**  
