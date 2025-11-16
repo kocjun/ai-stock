@@ -263,6 +263,7 @@ python tests/test_backtesting.py
 # Ollama LLM 설정
 OPENAI_API_BASE=http://127.0.0.1:11434
 OPENAI_MODEL_NAME=llama3.1:8b
+OPENAI_MODEL_FALLBACK=llama3.1:8b
 OPENAI_API_KEY=ollama
 CREWAI_LLM_PROVIDER=ollama
 

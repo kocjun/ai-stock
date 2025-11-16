@@ -7,6 +7,7 @@ LLM 클라이언트 통합 관리
 from crewai import LLM
 import os
 from dotenv import load_dotenv
+import requests
 
 load_dotenv()
 
@@ -35,7 +36,8 @@ def build_llm(mode: str = None) -> LLM:
 
     else:
         # Ollama 로컬 메인
-        model_name = os.getenv("OPENAI_MODEL_NAME", "gpt-oss:120b")
+        base_url = os.getenv("OPENAI_API_BASE", "http://127.0.0.1:11434")
+        model_name = _select_ollama_model(base_url)
 
         # ollama/ prefix 자동 추가
         if not model_name.startswith("ollama/"):
@@ -43,7 +45,7 @@ def build_llm(mode: str = None) -> LLM:
 
         return LLM(
             model=model_name,
-            base_url=os.getenv("OPENAI_API_BASE", "http://127.0.0.1:11434"),
+            base_url=base_url,
             api_key="ollama"
         )
 
@@ -81,6 +83,53 @@ def get_current_model_info() -> dict:
             "model": os.getenv("OPENAI_MODEL_NAME", "gpt-oss:120b"),
             "cost": "무료 (로컬)"
         }
+
+
+def _get_candidate_models() -> list[str]:
+    primary = os.getenv("OPENAI_MODEL_NAME", "gpt-oss:120b")
+    fallback = os.getenv("OPENAI_MODEL_FALLBACK")
+    candidates = [primary]
+    if fallback:
+        fallback = fallback.strip()
+        if fallback and fallback not in candidates:
+            candidates.append(fallback)
+    return candidates
+
+
+def _ollama_model_available(base_url: str, model_name: str, timeout: float) -> bool:
+    """Ollama 서버에서 특정 모델이 준비됐는지 확인."""
+    url = base_url.rstrip("/") + "/api/tags"
+    try:
+        resp = requests.get(url, timeout=timeout)
+        resp.raise_for_status()
+        payload = resp.json()
+        names = {
+            str(m.get("name") or m.get("model") or "").strip()
+            for m in payload.get("models", [])
+        }
+        target = model_name.replace("ollama/", "")
+        return target in names or model_name in names
+    except Exception as exc:
+        print(f"[LLM] Ollama healthcheck failed for {model_name}: {exc}")
+        return False
+
+
+def _select_ollama_model(base_url: str) -> str:
+    """
+    기본 모델을 우선 사용하되, 준비되지 않았으면 fallback 모델 사용.
+    """
+    timeout = float(os.getenv("LLM_HEALTHCHECK_TIMEOUT", "5"))
+    candidates = _get_candidate_models()
+
+    for idx, candidate in enumerate(candidates):
+        if _ollama_model_available(base_url, candidate, timeout):
+            if idx > 0:
+                print(f"[LLM] Primary model unavailable. Falling back to {candidate}.")
+            return candidate
+
+    print("[LLM] Unable to verify Ollama models via healthcheck; "
+          "using primary configuration.")
+    return candidates[0]
 
 
 if __name__ == "__main__":
