@@ -36,11 +36,11 @@
   - `./logs`와 `tests/logs`가 무한 성장할 수 있으므로 logrotate 또는 일정 기간 이후 삭제 스크립트를 준비한다.
 
 ## 5. 문서화 및 운영
+- **운영 Runbook 정리**  
+  - `docs/OPERATIONS_RUNBOOK.md`를 추가해 서비스 재시작, 부트스트랩, 통합 테스트, n8n 백업, HTTPS 권장 설정을 한 곳에 모았다. README에서도 참조하도록 링크를 추가했다.
 - **n8n 워크플로 백업**  
-  - `n8n_workflows/`에 수동으로 내보낸 JSON을 커밋했지만, 주기적으로 n8n export > repo 반영 프로세스를 문서화한다.  
-- **운영 시나리오**  
-  - plan.md에 NAS 재부팅/스냅샷 후 재기동 절차(Docker compose up, LLM 상태 확인)를 추가하면 운영자가 쉽게 대응 가능.
+  - Runbook에 UI/CLI export 절차를 포함했으며, 주기적으로 `n8n_workflows/`에 반영하도록 안내했다.
 - **보안**  
-  - n8n이 HTTP로 열려 있으므로 Synology Reverse Proxy + HTTPS 적용 계획을 문서화하고, `N8N_SECURE_COOKIE=true`를 사용할 수 있도록 준비한다.
+  - HTTP 노출 문제에 대한 대응(Reverse Proxy/HTTPS)도 Runbook에서 가이드한다.
 
 위 개선 사항을 우선순위별로 도입하면 NAS 환경에서도 안정적이고 재현 가능한 배포가 가능해진다.

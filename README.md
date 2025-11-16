@@ -253,6 +253,7 @@ python tests/test_backtesting.py
 - **[INTEGRATION_TEST_PLAN.md](docs/INTEGRATION_TEST_PLAN.md)**: 통합 테스트 계획 ✅
 - **[TEST_CHECKLIST.md](tests/TEST_CHECKLIST.md)**: 테스트 체크리스트 ✅
 - 컨테이너 환경에서 통합 테스트를 실행하려면 `./scripts/run_tests_in_container.sh` 스크립트를 사용하세요.
+- 운영 재기동/검증 절차는 **[OPERATIONS_RUNBOOK.md](docs/OPERATIONS_RUNBOOK.md)** 참고
 
 ---
 
