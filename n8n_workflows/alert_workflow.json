@@ -17,7 +17,10 @@
       "name": "매일 오전 9시 30분 실행",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
-      "position": [250, 300]
+      "position": [
+        250,
+        300
+      ]
     },
     {
       "parameters": {
@@ -27,7 +30,10 @@
       "name": "Alert Manager 실행",
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
-      "position": [500, 300]
+      "position": [
+        500,
+        300
+      ]
     },
     {
       "parameters": {
@@ -45,7 +51,10 @@
       "name": "알림 있는지 확인",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [750, 300]
+      "position": [
+        750,
+        300
+      ]
     },
     {
       "parameters": {
@@ -59,7 +68,10 @@
       "name": "Slack 알림 전송",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 3,
-      "position": [1000, 200]
+      "position": [
+        1000,
+        200
+      ]
     },
     {
       "parameters": {
@@ -72,42 +84,45 @@
       "name": "이메일 전송",
       "type": "n8n-nodes-base.emailSend",
       "typeVersion": 2,
-      "position": [1000, 400]
+      "position": [
+        1000,
+        400
+      ]
     }
   ],
   "connections": {
-    "schedule-trigger": {
+    "매일 오전 9시 30분 실행": {
       "main": [
         [
           {
-            "node": "run-alert-manager",
+            "node": "Alert Manager 실행",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "run-alert-manager": {
+    "Alert Manager 실행": {
       "main": [
         [
           {
-            "node": "check-alerts",
+            "node": "알림 있는지 확인",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "check-alerts": {
+    "알림 있는지 확인": {
       "main": [
         [
           {
-            "node": "send-slack",
+            "node": "Slack 알림 전송",
             "type": "main",
             "index": 0
           },
           {
-            "node": "send-email",
+            "node": "이메일 전송",
             "type": "main",
             "index": 0
           }
@@ -119,7 +134,11 @@
     "executionOrder": "v1"
   },
   "staticData": null,
-  "tags": ["stock", "alert", "automation"],
+  "tags": [
+    "stock",
+    "alert",
+    "automation"
+  ],
   "triggerCount": 0,
   "updatedAt": "2025-10-18T12:00:00.000Z",
   "versionId": "1"
