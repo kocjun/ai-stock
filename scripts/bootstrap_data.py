@@ -16,6 +16,10 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from core.utils.db_utils import get_db_connection
 
 
@@ -29,8 +33,10 @@ def run_data_curator() -> None:
     """investment_crew 실행을 통해 종목/가격 데이터를 수집."""
     print("[bootstrap] Running investment_crew.py to collect market data...")
     subprocess.run(
-        [sys.executable, "core/agents/investment_crew.py"],
+        [sys.executable, "-m", "core.agents.investment_crew"],
         check=True,
+        cwd=str(PROJECT_ROOT),
+        env={**os.environ, "PYTHONPATH": str(PROJECT_ROOT)}
     )
 
 

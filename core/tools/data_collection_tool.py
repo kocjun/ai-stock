@@ -4,7 +4,11 @@ from typing import Any
 from crewai.tools import BaseTool
 import FinanceDataReader as fdr
 from datetime import datetime, timedelta
-from core.utils.db_utils import insert_stocks_batch, insert_prices_batch
+from core.utils.db_utils import (
+    insert_stocks_batch,
+    insert_prices_batch,
+    get_stock_list
+)
 
 
 class DataCollectionTool(BaseTool):
@@ -125,8 +129,6 @@ class DataCollectionTool(BaseTool):
 
         # 2. 가격 데이터 수집
         try:
-            from db_utils import get_stock_list
-
             stocks = get_stock_list(limit=limit)
             success_count = 0
             fail_count = 0
