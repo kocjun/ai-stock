@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 # 프로젝트 루트 추가
 project_root = Path(__file__).parent.parent.parent
@@ -37,7 +37,8 @@ def send_market_news_via_smtp(
     sender_email: Optional[str] = None,
     smtp_server: Optional[str] = None,
     smtp_port: Optional[int] = None,
-    smtp_password: Optional[str] = None
+    smtp_password: Optional[str] = None,
+    news_items: Optional[List[Dict]] = None,
 ) -> bool:
     """
     SMTP를 이용한 직접 이메일 발송 (N8N 불필요)
@@ -85,7 +86,7 @@ def send_market_news_via_smtp(
         print(f"   SMTP 서버: {smtp_server}:{smtp_port}")
 
         # HTML 콘텐츠 생성
-        html_content = format_market_news_html(report)
+        html_content = format_market_news_html(report, news_items)
 
         # 이메일 메시지 구성
         msg = MIMEMultipart("alternative")
@@ -127,7 +128,8 @@ def send_market_news_email(
     report: str,
     webhook_url: Optional[str] = None,
     recipient_email: Optional[str] = None,
-    use_smtp: bool = True
+    use_smtp: bool = True,
+    news_items: Optional[List[Dict]] = None,
 ) -> bool:
     """
     시장 뉴스를 SMTP 또는 N8N 웹훅으로 이메일 발송
@@ -144,7 +146,7 @@ def send_market_news_email(
 
     # SMTP 우선 시도
     if use_smtp:
-        smtp_result = send_market_news_via_smtp(report, recipient_email)
+        smtp_result = send_market_news_via_smtp(report, recipient_email, news_items=news_items)
         if smtp_result:
             return True
         print("⚠️  SMTP 발송 실패, N8N 웹훅 시도...")
@@ -162,7 +164,7 @@ def send_market_news_email(
 
     try:
         # 페이로드 생성
-        payload = create_market_news_payload(report)
+        payload = create_market_news_payload(report, news_items)
 
         # 수신자 이메일 추가
         if recipient_email:

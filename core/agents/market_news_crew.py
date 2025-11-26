@@ -1,19 +1,20 @@
 """
-시장 뉴스 분석 및 요약 Crew (간소화 버전)
+시장 뉴스 분석 및 요약 Crew
 
-한국 코스피에 영향을 줄 만한 글로벌/국내 뉴스를 수집하고 분석하여
-투자자 관점에서 요약하는 AI Agent
-
-주의: 이 버전은 Mock 데이터를 사용합니다.
-실제 구현에서는 NewsAPI, Finnhub 등 실제 API를 연동하세요.
+Google News RSS/NewsAPI(옵션)에서 실시간 뉴스를 가져와
+시장 지표·KOSPI ETF 분석과 함께 이메일용 리포트를 생성한다.
 """
 
+from __future__ import annotations
+
+import hashlib
+import json
 import os
 import sys
-import json
 from datetime import datetime
-from typing import Dict, List, Any
 from pathlib import Path
+from textwrap import shorten
+from typing import Any, Dict, List, Tuple
 
 # 프로젝트 루트 추가
 project_root = Path(__file__).parent.parent.parent
@@ -22,287 +23,287 @@ sys.path.insert(0, str(project_root))
 # .env 파일 로드 (선택사항, 환경 변수로 override 가능)
 try:
     from dotenv import load_dotenv
+
     env_file = project_root / ".env"
     if env_file.exists():
         load_dotenv(env_file)
 except ImportError:
-    pass  # python-dotenv 미설치 시 무시
+    pass
 
 try:
-    from crewai import Agent, Task, Crew, Process
-except ImportError:
-    print("⚠️ CrewAI가 설치되지 않았습니다.")
-    print("pip install crewai 를 실행하세요.")
-    sys.exit(1)
+    from core.agents.kospi_etf_analyzer import analyze_kospi
+except Exception:  # pragma: no cover - 분석 모듈이 비활성화된 경우 대비
+    analyze_kospi = None
+
+from core.utils.market_metrics import format_snapshot_lines, get_market_snapshot
+from core.utils.news_fetcher import MarketNewsFetcher
+
+SECTION_CONFIG: List[Tuple[str, str]] = [
+    ("global", "🌍 글로벌 시장"),
+    ("semiconductor", "🔧 반도체 섹터"),
+    ("geopolitical", "⚔️ 지정학 리스크"),
+    ("korea", "🇰🇷 국내 시장"),
+]
+
+HISTORY_DIR = project_root / "reports" / "market_news_history"
+HISTORY_FILE = HISTORY_DIR / "history.json"
 
 
-# ============================================================================
-# 뉴스 데이터 (실제 API 대신 Mock 데이터)
-# ============================================================================
-
-def get_global_news_data() -> List[Dict]:
-    """나스닥, Fed, S&P 500 등 글로벌 시장 뉴스"""
-    return [
-        {
-            "title": "Fed 금리 인상 예고",
-            "source": "Reuters",
-            "impact": "high",
-            "category": "nasdaq",
-            "description": "연방준비제도가 다음 회의에서 금리 인상을 고려 중. 이는 달러 강세로 이어져 한국 수출주에 부정적."
-        },
-        {
-            "title": "S&P 500 신고가 경신",
-            "source": "Bloomberg",
-            "impact": "medium",
-            "category": "nasdaq",
-            "description": "S&P 500이 역사적 신고가를 경신했습니다. 미국 경제 강세 신호."
-        },
-        {
-            "title": "Tesla 배터리 기술 혁신",
-            "source": "TechCrunch",
-            "impact": "medium",
-            "category": "tech",
-            "description": "테슬라, 차세대 배터리 기술 발표. 전기차 산업 재편 가능성."
-        }
-    ]
-
-
-def get_semiconductor_news_data() -> List[Dict]:
-    """반도체 관련 뉴스"""
-    return [
-        {
-            "title": "Samsung 3nm 공정 진전",
-            "source": "전자신문",
-            "impact": "high",
-            "company": "Samsung",
-            "description": "삼성전자, 3nm 공정 대량 생산 시작. 반도체 경기 회복 신호."
-        },
-        {
-            "title": "TSMC 파운드리 수주 증가",
-            "source": "DigiTimes",
-            "impact": "high",
-            "company": "TSMC",
-            "description": "TSMC 파운드리 주문 급증으로 공급 부족 예상. 대만 반도체 경기 호황."
-        },
-        {
-            "title": "SK Hynix 메모리 가격 상승",
-            "source": "뉴스1",
-            "impact": "medium",
-            "company": "SK Hynix",
-            "description": "메모리 칩 수급 재편으로 가격 상승세. SK Hynix에 호재."
-        }
-    ]
-
-
-def get_geopolitical_news_data() -> List[Dict]:
-    """지정학적 리스크 관련 뉴스"""
-    return [
-        {
-            "title": "미중 기술 갈등 심화",
-            "source": "BBC",
-            "impact": "high",
-            "risk_level": "critical",
-            "description": "미국, 중국 반도체 기업에 추가 제재 계획. 반도체 공급망 우려."
-        },
-        {
-            "title": "한반도 긴장 고조",
-            "source": "연합뉴스",
-            "impact": "high",
-            "risk_level": "warning",
-            "description": "북한 미사일 발사로 한반도 긴장 고조. 방위사업주 주목."
-        },
-        {
-            "title": "러시아-우크라이나 갈등 지속",
-            "source": "Reuters",
-            "impact": "medium",
-            "risk_level": "warning",
-            "description": "에너지 가격 변동성 지속. 유가와 환율에 영향."
-        }
-    ]
-
-
-def get_korea_market_news_data() -> List[Dict]:
-    """한국 증시 관련 뉴스"""
-    return [
-        {
-            "title": "한은 금리 결정 예정",
-            "source": "연합뉴스",
-            "impact": "high",
-            "category": "domestic",
-            "description": "한국은행, 다음 주 금리 결정 회의 개최. 인상 확률 높음. 금리민감주 주의."
-        },
-        {
-            "title": "원/달러 환율 상승",
-            "source": "매일경제",
-            "impact": "high",
-            "category": "fx",
-            "description": "원화 약세로 수출주 상승. 삼성, 현대, SK 등 수혜."
-        },
-        {
-            "title": "코스피 200 선물 등락",
-            "source": "마켓뉴스",
-            "impact": "medium",
-            "category": "market",
-            "description": "야간 선물 시장 변동성. 오픈 시 호가 예상."
-        }
-    ]
-
-
-# ============================================================================
-# 분석 함수
-# ============================================================================
-
-def analyze_all_news() -> str:
-    """
-    모든 뉴스를 수집하고 분석하여 한국어로 요약
-
-    실제 환경에서는 CrewAI를 사용하지만,
-    여기서는 간단한 분석 로직으로 대체합니다.
-    """
-
-    # 모든 뉴스 수집
-    all_news = {
-        "global": get_global_news_data(),
-        "semiconductor": get_semiconductor_news_data(),
-        "geopolitical": get_geopolitical_news_data(),
-        "korea": get_korea_market_news_data()
+def _mock_article(title: str, source: str, description: str, impact: str, category: str) -> Dict[str, Any]:
+    return {
+        "title": title,
+        "source": source,
+        "impact": impact,
+        "category": category,
+        "description": description,
+        "summary": description,
+        "link": "",
+        "published_at": None,
     }
 
-    # 분석 리포트 생성
-    report = f"""
-## 📊 오늘의 시장 뉴스 요약
-**분석 시간**: {datetime.now().strftime('%Y년 %m월 %d일 %H:%M')}
-**증시 오픈까지**: 약 30분
 
----
-
-## 🌍 글로벌 시장 (나스닥)
-
-### ⚠️ 높은 영향도
-- **Fed 금리 인상 신호**
-  - 달러 강세로 한국 수출주 약세 우려
-  - 영향 종목: 삼성전자, SK 하이닉스, 현대차
-  - 추천: 수출주는 조심스럽게 접근
-
-- **S&P 500 신고가 경신**
-  - 미국 경제 강세 신호
-  - 글로벌 성장주에 호재
-
-### 🟡 중간 영향도
-- **Tesla 배터리 기술 혁신**
-  - 전기차 산업 재편 가능성
-  - 국내 배터리주 모니터링 필요
-
----
-
-## 🔧 반도체 뉴스
-
-### ⚠️ 높은 영향도
-- **Samsung 3nm 공정 시작**
-  - 반도체 산업 구조적 호재
-  - 영향 종목: 삼성전자, SK Hynix
-  - 추천: 해당 종목 매수 기회 재검토
-
-- **TSMC 파운드리 수주 급증**
-  - 글로벌 반도체 수급 재편
-  - 대만 반도체 호황 신호
-  - 한국 파운드리 관련 Supplier 주목
-
-### 🟡 중간 영향도
-- **SK Hynix 메모리 가격 상승**
-  - 메모리 수급 개선 신호
-  - SK Hynix에 긍정적
-
----
-
-## ⚔️ 지정학적 리스크
-
-### ⚠️ 높은 영향도
-- **미중 기술 제재 심화**
-  - 반도체 공급망 우려 재연
-  - 영향 범위: 광범위 (수출주 전반)
-  - 추천: 리스크 헤징 강화
-
-- **한반도 긴장 고조**
-  - 북한 미사일 발사
-  - 영향 종목: 방위사업주 (LIG넥스원, 현대로템 등)
-  - 추천: 방위주 주목
-
-### 🟡 중간 영향도
-- **러우 갈등 지속**
-  - 에너지 가격 변동성
-  - 유가, 환율에 영향
-
----
-
-## 🇰🇷 국내 뉴스
-
-### ⚠️ 높은 영향도
-- **한은 금리 결정 임박 (내일)**
-  - 인상 확률 높음
-  - 영향 범위: 금리민감주 (금융주, 부동산주)
-  - 추천: 금리 결정 후 방향성 확인 필수
-
-- **원/달러 환율 상승**
-  - 원화 약세 지속
-  - 영향 종목: 자동차, 전자, 반도체 (수출주)
-  - 추천: 수출주 매수 관심 높음
-
-### 🟡 중간 영향도
-- **야간 선물 변동성**
-  - 오픈 시장 호가 변동 예상
-  - 대기 필요
-
----
-
-## 📈 종합 평가
-
-### 🎯 이론적 평가: **호재 > 악재**
-
-**이유:**
-1. 반도체 섹터의 구조적 호재
-   - Samsung 3nm 공정 시작
-   - TSMC 파운드리 호황
-   - 메모리 가격 상승
-
-2. 수출주 환율 이익
-   - 원화 약세 진행
-   - 나스닥 약세 상쇄 가능
-
-3. 국내 수익성 개선
-   - 방위사업주 호재
-   - 금융주 정상화 기대
-
-### ⚠️ 주의사항
-- Fed 금리 결정이 실제 영향도 결정
-- 한은 금리 인상 시 금리민감주 조정 가능
-- 지정학 리스크 (미중, 한반도) 모니터링 필수
-
----
-
-## 💡 투자자 액션
-
-✅ **오늘 추천:**
-1. 반도체주 비중 확인 (호재 지속)
-2. 수출주 긍정적 평가 (환율 이익)
-3. 방위사업주 주목 (지정학 리스크)
-
-⚠️ **주의:**
-1. Fed 금리 발표 대기 (달러 강세 우려)
-2. 한은 금리 결정 대기 (내일)
-3. 미중 추가 제재 뉴스 모니터링
-
----
-
-**다음 보고서**: 내일 오전 9시
-"""
-
-    return report.strip()
+def get_mock_global_news_data() -> List[Dict]:
+    """RSS/API 실패 시 사용할 기본 글로벌 뉴스"""
+    return [
+        _mock_article(
+            "Fed 금리 인상 예고",
+            "Reuters",
+            "연준이 추가 금리 인상을 시사하며 달러 강세 우려가 커집니다.",
+            "high",
+            "global",
+        ),
+        _mock_article(
+            "S&P500 신고가 경신",
+            "Bloomberg",
+            "미국 증시는 기술주 강세 덕에 사상 최고치를 기록했습니다.",
+            "medium",
+            "global",
+        ),
+        _mock_article(
+            "Tesla 배터리 기술 혁신",
+            "TechCrunch",
+            "테슬라가 차세대 배터리를 공개하며 전기차 산업 재편 가능성을 알렸습니다.",
+            "medium",
+            "global",
+        ),
+    ]
 
 
-# ============================================================================
-# 메인 함수
-# ============================================================================
+def get_mock_semiconductor_news_data() -> List[Dict]:
+    return [
+        _mock_article(
+            "Samsung 3nm 공정 양산 돌입",
+            "전자신문",
+            "삼성전자가 차세대 3nm 공정에 성공하며 파운드리 경쟁력을 강화했습니다.",
+            "high",
+            "semiconductor",
+        ),
+        _mock_article(
+            "TSMC 파운드리 수주 증가",
+            "DigiTimes",
+            "TSMC 수주잔고가 늘어나며 공급 부족이 심화되고 있습니다.",
+            "high",
+            "semiconductor",
+        ),
+        _mock_article(
+            "SK Hynix 메모리 가격 회복",
+            "뉴스1",
+            "DDR5 가격 회복으로 SK Hynix 실적 개선 기대가 확대됩니다.",
+            "medium",
+            "semiconductor",
+        ),
+    ]
+
+
+def get_mock_geopolitical_news_data() -> List[Dict]:
+    return [
+        _mock_article(
+            "미중 기술 갈등 심화",
+            "BBC",
+            "미국의 추가 제재 예고로 반도체 공급망 불확실성이 증폭됩니다.",
+            "high",
+            "geopolitical",
+        ),
+        _mock_article(
+            "한반도 긴장 고조",
+            "연합뉴스",
+            "북한 미사일 발사 이후 방위산업주의 수급이 살아나고 있습니다.",
+            "high",
+            "geopolitical",
+        ),
+        _mock_article(
+            "러-우 전쟁 장기화",
+            "Reuters",
+            "에너지 가격 변동성이 확대되며 글로벌 수요 둔화 우려가 이어집니다.",
+            "medium",
+            "geopolitical",
+        ),
+    ]
+
+
+def get_mock_korea_news_data() -> List[Dict]:
+    return [
+        _mock_article(
+            "한은 금리 결정 임박",
+            "연합뉴스",
+            "한국은행 금통위가 매파 기조를 유지할 것으로 전망됩니다.",
+            "high",
+            "korea",
+        ),
+        _mock_article(
+            "원/달러 환율 상승",
+            "매일경제",
+            "원화 약세가 심화되며 수출주에는 우호적인 환경이 조성됩니다.",
+            "high",
+            "korea",
+        ),
+        _mock_article(
+            "코스피 200 선물 변동성 확대",
+            "마켓뉴스",
+            "야간선물 변동성으로 개장 직후 방향성이 다소 흔들릴 전망입니다.",
+            "medium",
+            "korea",
+        ),
+    ]
+
+
+def fetch_news_with_fallback() -> Dict[str, List[Dict]]:
+    """실시간 뉴스 수집 + 모의 데이터 폴백"""
+    fetcher = MarketNewsFetcher(logger=lambda msg: print(msg))
+    fetched = fetcher.fetch_all()
+
+    return {
+        "global": fetched.get("global") or get_mock_global_news_data(),
+        "semiconductor": fetched.get("semiconductor") or get_mock_semiconductor_news_data(),
+        "geopolitical": fetched.get("geopolitical") or get_mock_geopolitical_news_data(),
+        "korea": fetched.get("korea") or get_mock_korea_news_data(),
+    }
+
+
+def render_section(title: str, articles: List[Dict]) -> str:
+    lines = [f"## {title}"]
+    if not articles:
+        lines.append("- 관련 기사가 부족해 기본 데이터를 사용했습니다.")
+        return "\n".join(lines)
+
+    for article in articles[:5]:
+        source = article.get("source") or "출처 미상"
+        impact = (article.get("impact") or "medium").upper()
+        published = format_article_time(article.get("published_at"))
+        headline = f"- **{article.get('title')}** ({source}"
+        if published:
+            headline += f", {published}"
+        headline += f") [Impact: {impact}]"
+        lines.append(headline)
+
+        summary = article.get("summary") or article.get("description") or ""
+        summary = shorten(summary.replace("\n", " "), width=160, placeholder="…") if summary else ""
+        if summary:
+            lines.append(f"  - {summary}")
+
+        link = article.get("link")
+        if link:
+            lines.append(f"  - 링크: {link}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def format_article_time(value: Any) -> str:
+    if not value:
+        return ""
+    try:
+        dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    local = dt.astimezone()
+    return local.strftime("%m-%d %H:%M")
+
+
+def build_insights(news_sections: Dict[str, List[Dict]]) -> str:
+    total_articles = sum(len(items) for items in news_sections.values())
+    high_impact = sum(
+        1
+        for items in news_sections.values()
+        for article in items
+        if str(article.get("impact", "")).lower() == "high"
+    )
+    category_breakdown = ", ".join(
+        f"{title}: {len(news_sections.get(key, []))}건"
+        for key, title in SECTION_CONFIG
+    )
+
+    return "\n".join(
+        [
+            "## 🧭 종합 인사이트",
+            f"- 전체 기사 {total_articles}건 중 고위험 이슈 {high_impact}건 탐지",
+            f"- 카테고리 분포: {category_breakdown}",
+            "- 반복 수신 여부: 저장된 히스토리로 중복 감지",
+            "",
+        ]
+    )
+
+
+def flatten_news_items(news_sections: Dict[str, List[Dict]]) -> List[Dict]:
+    items = []
+    for key, articles in news_sections.items():
+        for article in articles:
+            data = dict(article)
+            data["section"] = key
+            items.append(data)
+    return items
+
+
+def record_report_history(report: str, news_items: List[Dict], snapshot: Dict) -> bool:
+    HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+    history: List[Dict] = []
+    if HISTORY_FILE.exists():
+        try:
+            history = json.loads(HISTORY_FILE.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            history = []
+
+    entry = {
+        "timestamp": datetime.now().isoformat(),
+        "hash": hashlib.sha256(report.encode("utf-8")).hexdigest(),
+        "article_count": len(news_items),
+        "snapshot": snapshot,
+    }
+
+    duplicate = bool(history and history[-1].get("hash") == entry["hash"])
+    entry["duplicate_with_previous"] = duplicate
+    history.append(entry)
+    history = history[-60:]  # 최근 60건만 유지
+
+    HISTORY_FILE.write_text(json.dumps(history, ensure_ascii=False, indent=2), encoding="utf-8")
+    return duplicate
+
+
+def build_report(news_sections: Dict[str, List[Dict]], snapshot: Dict, kospi_report: str | None) -> str:
+    now_str = datetime.now().strftime("%Y년 %m월 %d일 %H:%M")
+    lines = [
+        "## 📊 오늘의 시장 뉴스 요약",
+        f"**생성 시각**: {now_str}",
+        "**데이터 소스**: Google News RSS + FinanceDataReader 지표 스냅샷",
+        "",
+        format_snapshot_lines(snapshot),
+    ]
+
+    for key, title in SECTION_CONFIG:
+        lines.append(render_section(title, news_sections.get(key, [])))
+
+    lines.append(build_insights(news_sections))
+
+    if kospi_report:
+        lines.append("## 📌 KOSPI 지수 & ETF 인사이트")
+        lines.append(kospi_report)
+
+    lines.append(
+        "\n⚖️ 본 리포트는 정보 제공용이며 투자 조언이 아닙니다. "
+        "결정 전 개인의 리스크 허용 범위를 검토하세요."
+    )
+
+    return "\n".join(line for line in lines if line).strip()
+
 
 def generate_market_news_report() -> Dict[str, Any]:
     """
@@ -312,184 +313,37 @@ def generate_market_news_report() -> Dict[str, Any]:
         print("=" * 60)
         print("📰 시장 뉴스 분석 시작...")
         print("=" * 60)
-        print()
 
-        # 1. 뉴스 분석
-        market_news_report = analyze_all_news()
+        news_sections = fetch_news_with_fallback()
+        snapshot = get_market_snapshot()
 
-        print("✅ 뉴스 분석 완료")
-        print()
+        kospi_meta = None
+        kospi_report = None
+        if analyze_kospi:
+            try:
+                kospi_meta, kospi_report = analyze_kospi(news_sections)
+            except Exception as exc:
+                print(f"⚠️  KOSPI 분석 실패: {exc}")
 
-        # 2. 코스피 지수 및 ETF 분석
-        print("=" * 60)
-        print("📈 코스피 지수 & ETF 분석 시작...")
-        print("=" * 60)
-        print()
-
-        try:
-            from core.agents.kospi_etf_analyzer import analyze_kospi
-
-            # 뉴스 데이터 수집
-            all_news_data = {
-                "global": get_global_news_data(),
-                "semiconductor": get_semiconductor_news_data(),
-                "geopolitical": get_geopolitical_news_data(),
-                "korea": get_korea_market_news_data()
-            }
-
-            # 코스피 분석 실행
-            kospi_analysis, kospi_report = analyze_kospi(all_news_data)
-
-            print("✅ 코스피 지수 분석 완료")
-            print()
-
-        except Exception as e:
-            print(f"⚠️  코스피 분석 실패: {e}")
-            kospi_report = None
-            kospi_analysis = None
-
-        # 3. 최종 종합 리포트 생성
-        final_report = generate_comprehensive_report(market_news_report, kospi_report)
+        report = build_report(news_sections, snapshot, kospi_report)
+        flattened = flatten_news_items(news_sections)
+        duplicate = record_report_history(report, flattened, snapshot)
 
         return {
             "success": True,
             "timestamp": datetime.now().isoformat(),
-            "report": final_report,
-            "market_news": market_news_report,
-            "kospi_analysis": kospi_analysis,
-            "kospi_report": kospi_report,
-            "category": "comprehensive_market_analysis"
+            "report": report,
+            "news_items": flattened,
+            "snapshot": snapshot,
+            "kospi_analysis": kospi_meta,
+            "duplicate_with_previous": duplicate,
+            "category": "comprehensive_market_analysis",
         }
 
-    except Exception as e:
-        print(f"❌ 분석 실패: {e}")
-        import traceback
-        traceback.print_exc()
+    except Exception as exc:
+        print(f"❌ 분석 실패: {exc}")
+        return {"success": False, "error": str(exc)}
 
-        return {
-            "success": False,
-            "error": str(e),
-            "timestamp": datetime.now().isoformat()
-        }
-
-
-def generate_comprehensive_report(market_news: str, kospi_report: str = None) -> str:
-    """
-    시장 뉴스와 코스피 분석을 합친 종합 리포트 생성
-
-    Args:
-        market_news: 시장 뉴스 분석 텍스트
-        kospi_report: 코스피 지수 ETF 분석 텍스트
-
-    Returns:
-        최종 종합 리포트
-    """
-    comprehensive_report = f"""
-{'╔' + '═' * 78 + '╗'}
-{'║' + ' ' * 78 + '║'}
-{'║' + '  📰 종합 시장 분석 보고서 - 증시 오픈 전 최종 브리핑'.center(78) + '║'}
-{'║' + ' ' * 78 + '║'}
-{'╚' + '═' * 78 + '╝'}
-
-📅 생성시간: {datetime.now().strftime('%Y년 %m월 %d일 %H:%M:%S')}
-⏰ 증시 개장까지: 약 10시간 (매일 오전 9시 개장)
-
-{'═' * 80}
-【 PART 1. 시장 뉴스 분석 】
-{'═' * 80}
-
-{market_news}
-"""
-
-    if kospi_report:
-        comprehensive_report += f"""
-
-{'═' * 80}
-【 PART 2. 코스피 지수 & 지수 ETF 분석 】
-{'═' * 80}
-
-{kospi_report}
-"""
-
-    # 최종 요약 섹션
-    comprehensive_report += """
-
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                           📋 최종 투자 가이드 요약                            ║
-╚══════════════════════════════════════════════════════════════════════════════╝
-
-✅ 오늘의 핵심 포인트:
-
-1️⃣  반도체 섹터
-   • Samsung 3nm 공정 시작 → 구조적 호재 지속
-   • SK Hynix 메모리 가격 상승 → 실적 개선 기대
-   • 추천: 반도체주 매수 기회 재검토, 특히 TIGER 200 ETF
-
-2️⃣  수출주 (환율 우호)
-   • 원화 약세 진행 중 (USD 강세)
-   • 영향 종목: 삼성, 현대, SK 등 대형 수출 기업
-   • 추천: 대형주 중심 KODEX 100 또는 TIGER 200
-
-3️⃣  금리 민감주 (주의 필요)
-   • 한은 금리 결정 임박 (인상 확률 높음)
-   • 금융주, 부동산주 영향 예상
-   • 전략: 금리 결정 후 방향성 재확인 필수
-
-4️⃣  지정학적 리스크
-   • 미중 기술 갈등 심화 → 공급망 불확실성
-   • 한반도 긴장 고조 → 방위사업주 주목
-   • 주의: 리스크 헤징 강화 필요
-
-⚠️  투자 시 주의사항:
-
-• 포트폴리오의 20% 이상을 단일 ETF에 집중하지 마세요
-• 변동성이 높은 소형주 ETF는 분산 투자로 리스크 관리
-• 금리 정책 발표 시간 전후 변동성 증가 예상
-• 기존 포지션의 손절매 계획과 수익 실현 계획 수립
-• 정기적인 리밸런싱 (월 1회 이상) 권장
-
-📊 추천 포트폴리오 구성 (예시):
-
-상승장:
-├─ TIGER 200 (40%) - 대형주 중심, 안정적 수익
-├─ KODEX 소형주 (20%) - 고수익 추구
-├─ TIGER 배당성장 (20%) - 수익 고착
-└─ 현금/채권 (20%) - 리스크 관리
-
-중립장:
-├─ KODEX 100 (40%) - 변동성 낮은 대형주
-├─ TIGER 배당성장 (40%) - 배당 수익
-└─ 현금 (20%) - 진입 기회 대기
-
-하락장:
-├─ TIGER 배당성장 (50%) - 손실 완화
-├─ KODEX 100 (30%) - 안정성 우선
-└─ 현금 (20%) - 기회 포착 대기
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📌 더 자세한 정보는 상단 시장 뉴스 분석과 코스피 분석 섹션을 참조하세요.
-
-⚖️  법적 고지사항:
-
-본 분석은 공개 정보 기반의 교육용 자료이며, 투자 조언이 아닙니다.
-투자 결정 전에 항상 전문가의 상담을 받으시기 바랍니다.
-과거 성과가 미래 수익을 보장하지 않습니다.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-생성: AI Market Analysis Agent
-다음 보고서: 내일 오전 7시 (정상 거래일 기준)
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-"""
-
-    return comprehensive_report.strip()
-
-
-# ============================================================================
-# 메인 실행
-# ============================================================================
 
 if __name__ == "__main__":
     result = generate_market_news_report()
@@ -503,9 +357,9 @@ if __name__ == "__main__":
         print()
         print("=" * 60)
         print("✅ 분석 완료!")
-        print("=" * 60)
+        if result.get("duplicate_with_previous"):
+            print("⚠️  이전 결과와 동일한 리포트가 감지되었습니다.")
 
-        # 이메일 발송 시도
         print("\n" + "=" * 60)
         print("📧 이메일 발송")
         print("=" * 60)
@@ -513,15 +367,19 @@ if __name__ == "__main__":
         try:
             from core.utils.market_news_sender import send_market_news_email
 
-            success = send_market_news_email(result["report"], use_smtp=True)
+            success = send_market_news_email(
+                result["report"],
+                use_smtp=True,
+                news_items=result.get("news_items"),
+            )
 
             if success:
                 print("\n✅ 이메일 발송 완료!")
             else:
                 print("\n⚠️  이메일 발송 실패 (분석은 완료됨)")
 
-        except Exception as e:
-            print(f"\n⚠️  이메일 발송 모듈 로드 실패: {e}")
+        except Exception as exc:
+            print(f"\n⚠️  이메일 발송 모듈 로드 실패: {exc}")
             print("   분석 결과는 정상적으로 완료되었습니다.")
 
     else:

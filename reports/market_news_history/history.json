@@ -1,0 +1,77 @@
+[
+  {
+    "timestamp": "2025-11-25T21:34:50.062541",
+    "hash": "b3501112fa42387e6b371df4347ab7ede9a25097da9e9b18b7026ffdc20f01a2",
+    "article_count": 23,
+    "snapshot": {
+      "generated_at": "2025-11-25T21:34:50",
+      "kospi": null,
+      "kosdaq": null,
+      "usdkrw": null
+    },
+    "duplicate_with_previous": false
+  },
+  {
+    "timestamp": "2025-11-25T21:36:03.311406",
+    "hash": "93b87c65d35b99018810a97f40468565d59dc0be5c74dfbb024758d2601c9d88",
+    "article_count": 24,
+    "snapshot": {
+      "generated_at": "2025-11-25T21:36:03",
+      "kospi": null,
+      "kosdaq": null,
+      "usdkrw": null
+    },
+    "duplicate_with_previous": false
+  },
+  {
+    "timestamp": "2025-11-25T21:37:14.938898",
+    "hash": "cc9ca92e3191ea2a21cfb95f0c2d71689212cb6d7e80cf4ab2cf7685f9bd8e70",
+    "article_count": 24,
+    "snapshot": {
+      "generated_at": "2025-11-25T21:37:14",
+      "kospi": null,
+      "kosdaq": null,
+      "usdkrw": null
+    },
+    "duplicate_with_previous": false
+  },
+  {
+    "timestamp": "2025-11-25T21:40:19.640835",
+    "hash": "ae54074f737aa441fe7bcb8e35a3c2c15f183b888ce4ff802174ff1e02641ed7",
+    "article_count": 24,
+    "snapshot": {
+      "generated_at": "2025-11-25T21:40:18",
+      "kospi": null,
+      "kosdaq": null,
+      "usdkrw": null
+    },
+    "duplicate_with_previous": false
+  },
+  {
+    "timestamp": "2025-11-26T12:10:21.992815",
+    "hash": "b1b7699d391c8e4f4bef077b3ca97c347260a8c7ef7d0b8b065d037a87a5db92",
+    "article_count": 24,
+    "snapshot": {
+      "generated_at": "2025-11-26T12:10:21",
+      "kospi": {
+        "close": 3960.87,
+        "change": 103.08999999999969,
+        "pct": 2.6722622855631912,
+        "date": "2025-11-26"
+      },
+      "kosdaq": {
+        "close": 877.32,
+        "change": 21.290000000000077,
+        "pct": 2.4870623693094958,
+        "date": "2025-11-26"
+      },
+      "usdkrw": {
+        "close": 1475.010009765625,
+        "change": 0.1500244140625,
+        "pct": 0.010172112305748039,
+        "date": "2025-11-26"
+      }
+    },
+    "duplicate_with_previous": false
+  }
+]
