@@ -10,9 +10,105 @@ from core.tools.data_collection_tool import DataCollectionTool
 from core.tools.data_quality_tool import DataQualityTool
 from core.tools.n8n_webhook_tool import N8nWebhookTool
 from core.utils.llm_utils import build_llm, get_llm_mode
+from core.utils.db_utils import get_db_connection
+
+load_dotenv()
 
 
-def build_data_curator_crew(market: str = "KOSPI", limit: int = 50, days: int = 30):
+def summarize_data_state() -> dict:
+    """현재 stocks/prices 상태 요약"""
+    with get_db_connection() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM stocks;")
+        stock_count = cur.fetchone()[0]
+
+        cur.execute("SELECT COUNT(*), COUNT(DISTINCT code), MAX(date) FROM prices;")
+        price_count, distinct_codes, latest_date = cur.fetchone()
+
+        return {
+            "stocks": stock_count,
+            "price_rows": price_count or 0,
+            "price_codes": distinct_codes or 0,
+            "latest_price_date": latest_date
+        }
+
+
+def print_data_summary(label: str, summary: dict):
+    print(f"\n[{label}] 데이터 상태 요약")
+    print(f"  - 종목 수: {summary['stocks']}")
+    print(f"  - 가격 데이터 행수: {summary['price_rows']}")
+    print(f"  - 가격 데이터 보유 종목 수: {summary['price_codes']}")
+    latest_date = summary['latest_price_date']
+    latest_str = latest_date.strftime('%Y-%m-%d') if latest_date else '없음'
+    print(f"  - 가격 데이터 최신 일자: {latest_str}\n")
+
+
+def decide_collection_profile(summary: dict) -> dict:
+    """요일/커버리지 기반 수집 전략 결정"""
+    weekday = datetime.now().weekday()  # 0=Mon
+    age_days = 0
+    if summary["latest_price_date"]:
+        age_days = (datetime.utcnow().date() - summary["latest_price_date"]).days
+
+    profiles = [
+        {
+            "name": "대형주 집중",
+            "market": "KOSPI",
+            "limit": 70,
+            "days": 30,
+            "description": "시가총액 상위 대형주 업데이트",
+            "when": lambda wd, age: wd in (0, 3)  # Mon/Wed
+        },
+        {
+            "name": "테크·성장주",
+            "market": "KOSDAQ",
+            "limit": 80,
+            "days": 25,
+            "description": "성장 섹터(KOSDAQ) 수집",
+            "when": lambda wd, age: wd in (1, 4)  # Tue/Fri
+        },
+        {
+            "name": "단기 변동성",
+            "market": "KOSPI",
+            "limit": 40,
+            "days": 15,
+            "description": "단기 급등/급락 종목 모니터링",
+            "when": lambda wd, age: wd == 2  # Wed
+        },
+        {
+            "name": "주말 리프레시",
+            "market": "KOSPI",
+            "limit": 50,
+            "days": 45,
+            "description": "주말 리프레시",
+            "when": lambda wd, age: wd >= 5  # Sat/Sun
+        }
+    ]
+
+    # 커버리지 부족/최신일자 오래됨이면 강제 기본 수집
+    if summary["price_rows"] < summary["stocks"] * 15 or age_days > 2:
+        return {
+            "name": "기본 커버리지",
+            "market": "KOSPI",
+            "limit": 80,
+            "days": 45,
+            "description": "커버리지 보충 수집"
+        }
+
+    for profile in profiles:
+        if profile["when"](weekday, age_days):
+            return profile
+
+    return profiles[0]
+
+
+def build_data_curator_crew(
+    market: str = "KOSPI",
+    limit: int = 50,
+    days: int = 30,
+    baseline_state: dict | None = None,
+    strategy_name: str = ""
+):
     """
     Data Curator 에이전트 Crew 생성
 
@@ -46,6 +142,16 @@ def build_data_curator_crew(market: str = "KOSPI", limit: int = 50, days: int = 
         allow_delegation=False,
     )
 
+    baseline_text = ""
+    if baseline_state:
+        latest = baseline_state["latest_price_date"]
+        latest_str = latest.strftime('%Y-%m-%d') if latest else "없음"
+        baseline_text = (
+            f"현재 DB 상태 요약: 종목 {baseline_state['stocks']}개, "
+            f"가격 데이터 {baseline_state['price_rows']} rows, "
+            f"가격 데이터 최신 일자 {latest_str}."
+        )
+
     # 태스크 1: 데이터 수집
     collection_task = Task(
         description=f"""
@@ -63,6 +169,8 @@ def build_data_curator_crew(market: str = "KOSPI", limit: int = 50, days: int = 
         **중요:**
         - 정확한 명령어 형식을 사용하세요
         - 수집된 데이터의 통계를 포함하세요
+        - {baseline_text or "실행 전 상태 대비 변화(신규 종목/가격 행수 증가량)를 정량적으로 명시하세요."}
+        - 이번 전략: {strategy_name or "기본"} — 전략 의도에 맞는 종목 특징을 언급하세요.
         """,
         expected_output=f"""
         데이터 수집 결과 리포트:
@@ -70,6 +178,7 @@ def build_data_curator_crew(market: str = "KOSPI", limit: int = 50, days: int = 
         - 수집된 가격 데이터: N rows
         - 성공/실패 건수
         - 수집 기간 정보
+        - 이전 상태 대비 증가/감소 요약
         """,
         agent=data_curator,
     )
@@ -93,6 +202,7 @@ def build_data_curator_crew(market: str = "KOSPI", limit: int = 50, days: int = 
         **중요:**
         - 모든 품질 지표를 포함하세요
         - 이슈가 있으면 구체적으로 명시하세요
+        - 최근 실행 전 상태({baseline_text or "상세는 collection_task 참고"})와 비교하여 품질의 변화(커버리지 개선/악화, 날짜 지연)를 반드시 언급하세요.
         """,
         expected_output="""
         데이터 품질 검증 리포트:
@@ -124,6 +234,7 @@ def build_data_curator_crew(market: str = "KOSPI", limit: int = 50, days: int = 
         **중요:**
         - 숫자는 구체적으로 명시
         - 이슈가 있으면 우선순위와 함께 기록
+        - 실행 전 상태 대비 이번 수집이 가져온 개선 사항과 남은 리스크를 명확히 대조하세요.
         """,
         expected_output="""
         # 한국 주식 데이터 수집 리포트
@@ -159,6 +270,8 @@ def build_data_curator_crew(market: str = "KOSPI", limit: int = 50, days: int = 
 
 def main():
     """메인 실행 함수"""
+    before_state = summarize_data_state()
+
     print("=" * 80)
     print(" " * 25 + "한국 주식 투자 분석 AI 에이전트")
     print(" " * 30 + "Data Curator Phase")
@@ -170,16 +283,18 @@ def main():
     print(f"Ollama 서버: {ollama_url}")
     print(f"모델: {os.getenv('OPENAI_MODEL_NAME', 'llama3.1:8b')}\n")
 
-    # 수집 설정
-    MARKET = "KOSPI"
-    LIMIT = 50  # 테스트용 50개
-    DAYS = 30
+    profile = decide_collection_profile(before_state)
+    MARKET = profile["market"]
+    LIMIT = profile["limit"]
+    DAYS = profile["days"]
 
     print(f"수집 설정:")
+    print(f"  - 전략: {profile['name']} ({profile['description']})")
     print(f"  - 시장: {MARKET}")
     print(f"  - 종목 수: {LIMIT}")
     print(f"  - 기간: 최근 {DAYS}일\n")
     print("=" * 80)
+    print_data_summary("실행 전", before_state)
 
     # Crew 실행
     try:
@@ -196,6 +311,16 @@ def main():
         print("=" * 80)
         print("\n[최종 리포트]")
         print(result)
+
+        after_state = summarize_data_state()
+        print_data_summary("실행 후", after_state)
+
+        delta_stocks = after_state['stocks'] - before_state['stocks']
+        delta_rows = after_state['price_rows'] - before_state['price_rows']
+        if delta_rows <= 0:
+            print("[경고] 가격 데이터 행수가 증가하지 않았습니다. 수집 결과를 확인하세요.")
+        else:
+            print(f"[정보] 가격 데이터가 {delta_rows:,}건 증가했습니다.")
 
         # n8n webhook 전송
         if webhook_tool:
