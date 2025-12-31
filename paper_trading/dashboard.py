@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from datetime import datetime
 import math
+from typing import Optional
 
 # 프로젝트 루트 경로 추가
 project_root = Path(__file__).parent.parent
@@ -77,163 +78,158 @@ def get_color_by_value(value: float) -> str:
 
 def create_header():
     """헤더 생성"""
-    return dbc.Navbar(
-        dbc.Container([
-            dbc.Row([
-                dbc.Col([
-                    html.H3([
-                        html.I(className="fas fa-chart-line me-2"),
-                        "Paper Trading Dashboard"
-                    ], className="mb-0 text-white")
-                ], width="auto"),
-                dbc.Col([
-                    dbc.Button([
-                        html.I(className="fas fa-sync-alt me-1"),
-                        "수동 업데이트"
-                    ], id="refresh-button", color="light", outline=True, size="sm"),
-                    html.Span(id="last-update-time", className="text-white ms-3")
-                ], width="auto", className="ms-auto")
-            ], className="w-100", align="center")
-        ], fluid=True),
-        color="primary",
-        dark=True,
-        className="mb-4"
-    )
+    return html.Div([
+        html.Div([
+            html.Div("AQ", className="branding-icon"),
+            html.Div([
+                html.P("AstraQuant", className="meta-text mb-1"),
+                html.H1("Paper Trading Dashboard", className="mb-0")
+            ])
+        ], className="branding"),
+        html.Div([
+            html.Span("마지막 업데이트", className="meta-text"),
+            html.Span(id="last-update-time", className="meta-text")
+        ], className="header-actions")
+    ], className="dashboard-header")
+
+
+def create_filter_bar():
+    """글로벌 필터 바"""
+    return html.Div([
+        html.Div([
+            html.Div([
+                html.Label("조회 기간"),
+                dcc.Dropdown(
+                    id="performance-range",
+                    options=[
+                        {"label": "최근 30일", "value": 30},
+                        {"label": "최근 90일", "value": 90},
+                        {"label": "최근 180일", "value": 180}
+                    ],
+                    value=DEFAULT_RANGE_DAYS,
+                    clearable=False,
+                    className="control"
+                )
+            ], className="filter-group"),
+            html.Div([
+                html.Label("벤치마크"),
+                dcc.Dropdown(
+                    id="benchmark-select",
+                    options=BENCHMARK_CHOICES,
+                    value=DEFAULT_BENCHMARK,
+                    clearable=False,
+                    className="control"
+                )
+            ], className="filter-group")
+        ], className="filter-grid"),
+        html.Div([
+            html.Button([
+                html.I(className="fas fa-sync-alt"),
+                "수동 업데이트"
+            ], id="refresh-button", className="btn btn-primary btn-md")
+        ], className="filter-actions")
+    ], className="filter-bar")
 
 
 def create_metric_card(title: str, value: str, subtitle: str = "", color: str = "primary"):
     """메트릭 카드 생성"""
-    return dbc.Card([
-        dbc.CardBody([
-            html.H6(title, className="text-muted mb-2"),
-            html.H3(value, className=f"text-{color} mb-1"),
-            html.P(subtitle, className="text-muted small mb-0") if subtitle else None
-        ])
-    ], className="mb-3")
+    value_classes = ["kpi-value"]
+    if color == "success":
+        value_classes.append("text-positive")
+    elif color == "danger":
+        value_classes.append("text-negative")
+    elif color not in ("primary", "info", "warning"):
+        value_classes.append(color)
+
+    subtitle_node = html.Div(subtitle, className="kpi-meta") if subtitle else None
+
+    return html.Div([
+        html.Div(title, className="kpi-label"),
+        html.Div(value, className=" ".join(value_classes)),
+        subtitle_node
+    ], className="kpi-card")
+
+
+def build_section(title: str, body, actions=None, section_id: Optional[str] = None):
+    """섹션 공통 레이아웃"""
+    header_children = [
+        html.H4(title, className="section-title")
+    ]
+    if actions:
+        header_children.append(html.Div(actions, className="section-actions"))
+
+    return html.Div([
+        html.Div(header_children, className="section-header"),
+        html.Div(body, className="section-card")
+    ], className="section", id=section_id)
 
 
 def create_portfolio_section():
     """포트폴리오 현황 섹션"""
-    return dbc.Card([
-        dbc.CardHeader([
-            html.H5([
-                html.I(className="fas fa-wallet me-2"),
-                "포트폴리오 현황"
-            ], className="mb-0")
-        ]),
-        dbc.CardBody([
-            dbc.Row([
-                dbc.Col([
-                    html.Div(id="account-metrics"),
-                    html.Div(id="equity-highlight-cards", className="mt-3")
-                ], md=12, lg=8),
-                dbc.Col([
-                    dcc.Graph(id="portfolio-pie-chart", config={'displayModeBar': False})
-                ], md=12, lg=4)
+    body = html.Div([
+        html.Div(id="account-metrics", className="kpi-stack"),
+        html.Div([
+            html.Div([
+                html.H6("보유 종목", className="mb-3"),
+                html.Div(id="portfolio-table", className="table-dense")
             ]),
-            html.Hr(),
-            html.H6("보유 종목", className="mb-3"),
-            html.Div(id="portfolio-table"),
-            html.Hr(),
-            html.H6("보유 종목 손익", className="mb-3"),
-            dcc.Graph(id="position-profit-chart", config={'displayModeBar': False})
-        ])
-    ], className="mb-4")
+            html.Div(dcc.Graph(id="portfolio-pie-chart", config={'displayModeBar': False}))
+        ], className="portfolio-grid")
+    ])
+    return build_section("포트폴리오 현황", body, section_id="portfolio-section")
 
 
 def create_performance_section():
     """성과 분석 섹션"""
-    return dbc.Card([
-        dbc.CardHeader([
-            html.H5([
-                html.I(className="fas fa-chart-bar me-2"),
-                "성과 분석"
-            ], className="mb-0")
-        ]),
-        dbc.CardBody([
-            dbc.Row([
-                dbc.Col([
-                    html.Label("조회 기간", className="fw-semibold small"),
-                    dcc.Dropdown(
-                        id="performance-range",
-                        options=[
-                            {"label": "최근 30일", "value": 30},
-                            {"label": "최근 90일", "value": 90},
-                            {"label": "최근 180일", "value": 180}
-                        ],
-                        value=DEFAULT_RANGE_DAYS,
-                        clearable=False,
-                        className="mb-2"
-                    )
-                ], xs=12, sm=6, md=4, lg=3),
-                dbc.Col([
-                    html.Label("벤치마크", className="fw-semibold small"),
-                    dcc.Dropdown(
-                        id="benchmark-select",
-                        options=BENCHMARK_CHOICES,
-                        value=DEFAULT_BENCHMARK,
-                        clearable=False,
-                        className="mb-2"
-                    )
-                ], xs=12, sm=6, md=4, lg=3)
-            ], className="g-2 mb-2"),
-            html.Div(id="performance-metrics"),
-            html.Div(id="performance-insights", className="mb-3"),
-            html.Hr(),
-            dbc.Row([
-                dbc.Col([
-                    dcc.Graph(id="value-history-chart")
-                ], md=12, lg=8),
-                dbc.Col([
-                    dcc.Graph(id="daily-returns-chart")
-                ], md=12, lg=4)
-            ]),
-            html.Hr(),
-            dcc.Graph(id="monthly-returns-chart")
-        ])
-    ], className="mb-4")
+    body = html.Div([
+        html.Div(id="performance-metrics", className="kpi-grid"),
+        html.Div(id="performance-insights", className="kpi-grid"),
+        html.Div([
+            dcc.Graph(id="value-history-chart"),
+            dcc.Graph(id="daily-returns-chart")
+        ], className="chart-grid"),
+        html.Div(dcc.Graph(id="monthly-returns-chart"))
+    ])
+    return build_section("성과 분석", body, section_id="performance-section")
 
 
 def create_trades_section():
     """거래 내역 섹션"""
-    return dbc.Card([
-        dbc.CardHeader([
-            html.H5([
-                html.I(className="fas fa-exchange-alt me-2"),
-                "최근 거래 내역"
-            ], className="mb-0")
-        ]),
-        dbc.CardBody([
-            dbc.Row([
-                dbc.Col([
-                    dbc.RadioItems(
-                        id="trade-type-filter",
-                        options=[
-                            {"label": "전체", "value": "all"},
-                            {"label": "매수", "value": "buy"},
-                            {"label": "매도", "value": "sell"}
-                        ],
-                        value="all",
-                        inline=True,
-                        className="mb-3"
-                    )
-                ], md=6),
-                dbc.Col([
-                    dbc.Input(
-                        id="trade-limit-input",
-                        type="number",
-                        value=20,
-                        min=5,
-                        max=100,
-                        step=5,
-                        placeholder="조회 건수",
-                        className="mb-3"
-                    )
-                ], md=6)
-            ]),
-            html.Div(id="trades-table")
-        ])
-    ], className="mb-4")
+    controls = html.Div([
+        html.Div([
+            html.Label("거래 유형"),
+            dbc.RadioItems(
+                id="trade-type-filter",
+                options=[
+                    {"label": "전체", "value": "all"},
+                    {"label": "매수", "value": "buy"},
+                    {"label": "매도", "value": "sell"}
+                ],
+                value="all",
+                inline=True,
+                className="chip-group"
+            )
+        ], className="filter-group"),
+        html.Div([
+            html.Label("조회 건수"),
+            dcc.Input(
+                id="trade-limit-input",
+                type="number",
+                value=20,
+                min=5,
+                max=100,
+                step=5,
+                placeholder="20",
+                className="control"
+            )
+        ], className="filter-group")
+    ], className="filter-grid")
+
+    body = html.Div([
+        controls,
+        html.Div(id="trades-table", className="table-dense")
+    ])
+    return build_section("최근 거래 내역", body, section_id="trades-section")
 
 
 # ===== 메인 레이아웃 =====
@@ -246,10 +242,8 @@ def create_trades_section():
 @app.callback(
     [
         Output("account-metrics", "children"),
-        Output("equity-highlight-cards", "children"),
         Output("portfolio-table", "children"),
         Output("portfolio-pie-chart", "figure"),
-        Output("position-profit-chart", "figure"),
         Output("performance-metrics", "children"),
         Output("performance-insights", "children"),
         Output("value-history-chart", "figure"),
@@ -282,108 +276,61 @@ def update_dashboard(n_intervals, n_clicks, range_days, benchmark_code):
             print(f"포트폴리오 업데이트 실패: {e}")
 
     metrics = dd.get_performance_metrics(ACCOUNT_ID)
-    equity_stats = dd.get_equity_extremes(ACCOUNT_ID, days=max(range_days, 180))
 
     cash_ratio = (summary['cash_balance'] / summary['total_value'] * 100) if summary['total_value'] else 0.0
 
-    account_cards = dbc.Row([
-        dbc.Col([
-            create_metric_card(
-                "총 자산",
-                format_currency(summary['total_value']),
-                f"초기 자금: {format_currency(summary['initial_balance'])}",
-                "primary"
-            )
-        ], md=6, lg=3),
-        dbc.Col([
-            create_metric_card(
-                "현금 잔고",
-                format_currency(summary['cash_balance']),
-                f"비중: {cash_ratio:.1f}%",
-                "info"
-            )
-        ], md=6, lg=3),
-        dbc.Col([
-            create_metric_card(
-                "주식 평가액",
-                format_currency(summary['stock_value']),
-                f"보유 종목: {summary['num_positions']}개",
-                "warning"
-            )
-        ], md=6, lg=3),
-        dbc.Col([
-            create_metric_card(
-                "총 수익",
-                format_currency(summary['total_return']),
-                format_percent(summary['return_pct']),
-                get_color_by_value(summary['total_return'])
-            )
-        ], md=6, lg=3)
-    ], className="g-3")
+    account_cards = [
+        create_metric_card(
+            "총 자산",
+            format_currency(summary['total_value']),
+            f"초기 자금: {format_currency(summary['initial_balance'])}",
+            "primary"
+        ),
+        create_metric_card(
+            "현금 잔고",
+            format_currency(summary['cash_balance']),
+            f"비중: {cash_ratio:.1f}%",
+            "info"
+        ),
+        create_metric_card(
+            "주식 평가액",
+            format_currency(summary['stock_value']),
+            f"보유 종목: {summary['num_positions']}개",
+            "warning"
+        ),
+        create_metric_card(
+            "총 수익",
+            format_currency(summary['total_return']),
+            format_percent(summary['return_pct']),
+            get_color_by_value(summary['total_return'])
+        )
+    ]
 
-    equity_cards = dbc.Row([
-        dbc.Col([
-            create_metric_card(
-                "누적 수익",
-                format_currency(summary['total_return']),
-                format_percent(summary['return_pct']),
-                get_color_by_value(summary['total_return'])
-            )
-        ], md=6, lg=3),
-        dbc.Col([
-            create_metric_card(
-                "최고 자산",
-                format_currency(equity_stats['peak_value']),
-                equity_stats.get('peak_date') or "-",
-                "info"
-            )
-        ], md=6, lg=3),
-        dbc.Col([
-            create_metric_card(
-                "최고 수익률",
-                format_percent(equity_stats['peak_return_pct']),
-                f"{format_currency(equity_stats['peak_gain'])} 증가",
-                get_color_by_value(equity_stats['peak_return_pct'])
-            )
-        ], md=6, lg=3),
-        dbc.Col([
-            create_metric_card(
-                "현재 낙폭",
-                format_percent(equity_stats['drawdown_pct']),
-                "최고점 대비",
-                get_color_by_value(equity_stats['drawdown_pct'])
-            )
-        ], md=6, lg=3)
-    ], className="g-3")
+    pnl_cards = [
+        create_metric_card(
+            "실현 손익",
+            format_currency(metrics['realized_profit']),
+            "누적 기준",
+            get_color_by_value(metrics['realized_profit'])
+        ),
+        create_metric_card(
+            "미실현 손익",
+            format_currency(metrics['unrealized_profit']),
+            "현재 포지션 기준",
+            get_color_by_value(metrics['unrealized_profit'])
+        ),
+        create_metric_card(
+            "평균 거래당 수익",
+            format_currency(metrics['avg_profit_per_trade']),
+            "실현 손익 / 총 거래 수",
+            get_color_by_value(metrics['avg_profit_per_trade'])
+        )
+    ]
 
-    pnl_cards = dbc.Row([
-        dbc.Col([
-            create_metric_card(
-                "실현 손익",
-                format_currency(metrics['realized_profit']),
-                "누적 기준",
-                get_color_by_value(metrics['realized_profit'])
-            )
-        ], md=6, lg=3),
-        dbc.Col([
-            create_metric_card(
-                "미실현 손익",
-                format_currency(metrics['unrealized_profit']),
-                "현재 포지션 기준",
-                get_color_by_value(metrics['unrealized_profit'])
-            )
-        ], md=6, lg=3),
-        dbc.Col([
-            create_metric_card(
-                "평균 거래당 수익",
-                format_currency(metrics['avg_profit_per_trade']),
-                "실현 손익 / 총 거래 수",
-                get_color_by_value(metrics['avg_profit_per_trade'])
-            )
-        ], md=6, lg=3)
-    ], className="g-3 mt-1")
-
-    account_metrics = html.Div([account_cards, pnl_cards])
+    account_metrics = html.Div([
+        html.Div(account_cards, className="kpi-grid"),
+        html.Div(pnl_cards, className="kpi-grid")
+    ], className="kpi-stack")
 
     # 2. 포트폴리오 포지션
     positions_df = dd.get_portfolio_positions(ACCOUNT_ID)
@@ -424,7 +371,8 @@ def update_dashboard(n_intervals, n_clicks, range_days, benchmark_code):
             bordered=True,
             hover=True,
             responsive=True,
-            size='sm'
+            size='sm',
+            className="table table-dense"
         )
 
         # 파이 차트 (포트폴리오 비중)
@@ -439,24 +387,6 @@ def update_dashboard(n_intervals, n_clicks, range_days, benchmark_code):
             margin=dict(t=40, b=0, l=0, r=0),
             height=300
         )
-
-        profit_df = positions_df.sort_values('profit_loss', ascending=False)
-        profit_colors = ['#198754' if val >= 0 else '#dc3545' for val in profit_df['profit_loss']]
-        position_profit_fig = go.Figure()
-        position_profit_fig.add_trace(go.Bar(
-            x=profit_df['name'],
-            y=profit_df['profit_loss'],
-            marker_color=profit_colors,
-            text=profit_df['profit_loss_pct'].apply(lambda x: f"{x:+.2f}%"),
-            textposition='outside'
-        ))
-        position_profit_fig.update_layout(
-            margin=dict(t=30, b=80),
-            height=320,
-            xaxis_tickangle=-30,
-            yaxis_title="평가손익 (₩)",
-            title="보유 종목 손익"
-        )
     else:
         portfolio_table = html.P("보유 종목이 없습니다.", className="text-muted")
         pie_fig = go.Figure()
@@ -470,53 +400,34 @@ def update_dashboard(n_intervals, n_clicks, range_days, benchmark_code):
             margin=dict(t=40, b=0, l=0, r=0),
             height=300
         )
-        position_profit_fig = go.Figure()
-        position_profit_fig.add_annotation(
-            text="표시할 종목이 없습니다",
-            xref="paper", yref="paper",
-            x=0.5, y=0.5, showarrow=False,
-            font=dict(size=16, color="gray")
-        )
-        position_profit_fig.update_layout(
-            margin=dict(t=40, b=0, l=0, r=0),
-            height=300
-        )
 
     # 3. 성과 지표
-    performance_metrics = dbc.Row([
-        dbc.Col([
-            create_metric_card(
-                "총 거래 횟수",
-                f"{metrics['total_trades']}건",
-                f"매수 {metrics['buy_trades']} / 매도 {metrics['sell_trades']}",
-                "primary"
-            )
-        ], md=6, lg=3),
-        dbc.Col([
-            create_metric_card(
-                "승률",
-                f"{metrics['win_rate']:.1f}%",
-                "익절 거래 비율",
-                get_color_by_value(metrics['win_rate'] - 50)
-            )
-        ], md=6, lg=3),
-        dbc.Col([
-            create_metric_card(
-                "Sharpe Ratio",
-                f"{metrics['sharpe_ratio']:.2f}",
-                "위험 대비 수익",
-                "info"
-            )
-        ], md=6, lg=3),
-        dbc.Col([
-            create_metric_card(
-                "최대 낙폭 (MDD)",
-                f"{metrics['max_drawdown']:.2f}%",
-                "최대 손실 구간",
-                "danger"
-            )
-        ], md=6, lg=3)
-    ])
+    performance_metrics = html.Div([
+        create_metric_card(
+            "총 거래 횟수",
+            f"{metrics['total_trades']}건",
+            f"매수 {metrics['buy_trades']} / 매도 {metrics['sell_trades']}",
+            "primary"
+        ),
+        create_metric_card(
+            "승률",
+            f"{metrics['win_rate']:.1f}%",
+            "익절 거래 비율",
+            get_color_by_value(metrics['win_rate'] - 50)
+        ),
+        create_metric_card(
+            "Sharpe Ratio",
+            f"{metrics['sharpe_ratio']:.2f}",
+            "위험 대비 수익",
+            "info"
+        ),
+        create_metric_card(
+            "최대 낙폭 (MDD)",
+            f"{metrics['max_drawdown']:.2f}%",
+            "최대 손실 구간",
+            "danger"
+        )
+    ], className="kpi-grid")
 
     # 4. 추가 성과 인사이트
     daily_stats = dd.get_daily_performance_stats(ACCOUNT_ID, days=range_days)
@@ -524,40 +435,32 @@ def update_dashboard(n_intervals, n_clicks, range_days, benchmark_code):
     worst_return = daily_stats.get('worst_return', 0.0)
     avg_daily_return = daily_stats.get('average_return', 0.0)
 
-    insights_content = dbc.Row([
-        dbc.Col([
-            create_metric_card(
-                "최고 일간 수익률",
-                format_percent(best_return),
-                daily_stats.get('best_date', "-"),
-                get_color_by_value(best_return)
-            )
-        ], md=6, lg=3),
-        dbc.Col([
-            create_metric_card(
-                "최저 일간 수익률",
-                format_percent(worst_return),
-                daily_stats.get('worst_date', "-"),
-                get_color_by_value(worst_return)
-            )
-        ], md=6, lg=3),
-        dbc.Col([
-            create_metric_card(
-                "평균 일간 수익률",
-                format_percent(avg_daily_return),
-                f"최근 {range_days}일 기준",
-                get_color_by_value(avg_daily_return)
-            )
-        ], md=6, lg=3),
-        dbc.Col([
-            create_metric_card(
-                "평균 보유 일수",
-                f"{avg_holding_days}일",
-                "현재 포지션 기준",
-                "secondary"
-            )
-        ], md=6, lg=3)
-    ], className="g-3")
+    insights_content = html.Div([
+        create_metric_card(
+            "최고 일간 수익률",
+            format_percent(best_return),
+            daily_stats.get('best_date', "-"),
+            get_color_by_value(best_return)
+        ),
+        create_metric_card(
+            "최저 일간 수익률",
+            format_percent(worst_return),
+            daily_stats.get('worst_date', "-"),
+            get_color_by_value(worst_return)
+        ),
+        create_metric_card(
+            "평균 일간 수익률",
+            format_percent(avg_daily_return),
+            f"최근 {range_days}일 기준",
+            get_color_by_value(avg_daily_return)
+        ),
+        create_metric_card(
+            "평균 보유 일수",
+            f"{avg_holding_days}일",
+            "현재 포지션 기준",
+            "secondary"
+        )
+    ], className="kpi-grid")
 
     # 4. 자산 추이 차트
     history_df = dd.get_portfolio_history(ACCOUNT_ID, days=range_days)
@@ -697,10 +600,8 @@ def update_dashboard(n_intervals, n_clicks, range_days, benchmark_code):
 
     return (
         account_metrics,
-        equity_cards,
         portfolio_table,
         pie_fig,
-        position_profit_fig,
         performance_metrics,
         insights_content,
         value_fig,
@@ -760,7 +661,8 @@ def update_trades_table(trade_type, limit, n_intervals, n_clicks):
             bordered=True,
             hover=True,
             responsive=True,
-            size='sm'
+            size='sm',
+            className="table table-dense"
         )
 
         return trades_table
@@ -772,33 +674,23 @@ def update_trades_table(trade_type, limit, n_intervals, n_clicks):
 
 def create_ai_insights_section():
     """AI 분석 인사이트 섹션"""
-    return dbc.Card([
-        dbc.CardHeader([
-            html.H5([
-                html.I(className="fas fa-robot me-2"),
-                "🤖 AI 분석 인사이트"
-            ], className="mb-0")
-        ], className="bg-primary text-white"),
-        dbc.CardBody([
-            dbc.Row([
-                dbc.Col([
-                    html.Div([
-                        html.H6("포트폴리오 AI 전망", className="text-muted"),
-                        html.Div(id="portfolio-ai-summary")
-                    ])
-                ], md=12, lg=6),
-                dbc.Col([
-                    html.Div([
-                        html.H6("섹터별 배분 & AI 점수", className="text-muted"),
-                        dcc.Graph(id="sector-allocation-chart", config={'displayModeBar': False})
-                    ])
-                ], md=12, lg=6)
+    body = html.Div([
+        html.Div([
+            html.Div([
+                html.H6("포트폴리오 AI 전망", className="mb-3"),
+                html.Div(id="portfolio-ai-summary")
             ]),
-            html.Hr(),
+            html.Div([
+                html.H6("섹터별 배분 & AI 점수", className="mb-3"),
+                dcc.Graph(id="sector-allocation-chart", config={'displayModeBar': False})
+            ])
+        ], className="portfolio-grid"),
+        html.Div([
             html.H6("보유 종목 AI 분석", className="mb-3"),
             html.Div(id="holding-ai-analysis-table")
-        ])
-    ], className="mb-4")
+        ], className="table-dense")
+    ])
+    return build_section("AI 분석 인사이트", body, section_id="ai-insights")
 
 
 def create_stock_detail_modal():
@@ -1023,7 +915,8 @@ def update_ai_insights(n_intervals):
                 bordered=True,
                 hover=True,
                 responsive=True,
-                size="sm"
+                size="sm",
+                className="table table-dense"
             )
         else:
             table_content = dbc.Alert("AI 분석 데이터가 없습니다", color="warning")
@@ -1037,42 +930,36 @@ def update_ai_insights(n_intervals):
 
 # ===== 앱 레이아웃 설정 (모든 함수 정의 이후) =====
 
-app.layout = dbc.Container([
-    # 헤더
-    create_header(),
+app.layout = html.Div([
+    html.Div([
+        create_header(),
+        create_filter_bar(),
 
-    # 자동 새로고침 컴포넌트
-    dcc.Interval(
-        id='refresh-interval',
-        interval=REFRESH_INTERVAL,
-        n_intervals=0
-    ),
-    dcc.Interval(
-        id='interval-component',
-        interval=REFRESH_INTERVAL,
-        n_intervals=0
-    ),
+        dcc.Interval(
+            id='refresh-interval',
+            interval=REFRESH_INTERVAL,
+            n_intervals=0
+        ),
+        dcc.Interval(
+            id='interval-component',
+            interval=REFRESH_INTERVAL,
+            n_intervals=0
+        ),
 
-    # 메인 콘텐츠
-    dbc.Row([
-        dbc.Col([
-            # 포트폴리오 현황
-            create_portfolio_section(),
+        html.Div([
+            html.Div([
+                create_portfolio_section(),
+                create_trades_section()
+            ]),
+            html.Div([
+                create_performance_section(),
+                create_ai_insights_section()
+            ])
+        ], className="content-grid"),
 
-            # AI 분석 인사이트
-            create_ai_insights_section(),
-
-            # 성과 분석
-            create_performance_section(),
-
-            # 거래 내역
-            create_trades_section(),
-
-            # 종목 상세 분석 모달
-            create_stock_detail_modal()
-        ])
-    ])
-], fluid=True)
+        create_stock_detail_modal()
+    ], className="app-container")
+], className="app-shell")
 
 
 # ===== 메인 실행 =====
