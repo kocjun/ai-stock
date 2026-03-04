@@ -16,7 +16,7 @@ def get_db_connection():
         port=os.getenv("DB_PORT", "5432"),
         database=os.getenv("DB_NAME", "investment_db"),
         user=os.getenv("DB_USER", "invest_user"),
-        password=os.getenv("DB_PASSWORD", "REDACTED_DB_PASSWORD")
+        password=os.getenv("DB_PASSWORD")
     )
 
 

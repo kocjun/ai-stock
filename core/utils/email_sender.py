@@ -126,7 +126,7 @@ def format_trading_result_email(result_data: Dict) -> str:
             port=os.getenv("DB_PORT", "5432"),
             database=os.getenv("DB_NAME", "investment_db"),
             user=os.getenv("DB_USER", "invest_user"),
-            password=os.getenv("DB_PASSWORD", "REDACTED_DB_PASSWORD")
+            password=os.getenv("DB_PASSWORD")
         )
         cur = conn.cursor()
         cur.execute("SELECT code, name FROM stocks")
